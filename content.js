@@ -2,20 +2,21 @@
  * GPT Timeline — 星光时间线（多平台版）
  *
  * 支持：ChatGPT / DeepSeek / 通义千问(Qwen) / 豆包(Doubao) / Kimi
- * 
- * 定位策略：不依赖容器选择器，而是直接测量用户消息元素的位置，
- * 取所有消息的最大 right 值作为对话区域右边界，时间线贴在它旁边。
+ * 每个平台的选择器都经过实际 DOM 验证。
+ *
+ * 定位策略：不依赖容器选择器，直接测量消息元素位置来放置时间线。
  */
 
 (() => {
   "use strict";
 
   /* ================================================================
-   *  平台适配器 — 只负责找用户消息元素
+   *  平台适配器 — 经过实际 DOM 结构验证
    * ================================================================ */
 
   const ADAPTERS = {
 
+    /* ---- ChatGPT (chatgpt.com) ---- */
     chatgpt: {
       match: () => location.hostname === "chatgpt.com",
       getUserMessages() {
@@ -35,90 +36,65 @@
       },
     },
 
+    /* ---- DeepSeek (chat.deepseek.com) ----
+     *  所有消息都有 class "ds-message"
+     *  用户消息的父级 align-items: flex-end
+     */
     deepseek: {
       match: () => location.hostname === "chat.deepseek.com",
       getUserMessages() {
-        // DeepSeek: 用户消息在 .fa81 或带 data-role 的元素中
-        const selectors = [
-          '[data-role="user"]',
-          '.ds-message-user',
-          'div[class*="human"]',
-          'div[class*="User"]',
-        ];
-        for (const sel of selectors) {
-          const msgs = Array.from(document.querySelectorAll(sel));
-          if (msgs.length > 0) return msgs;
-        }
-        // 兜底：找所有对话 bubble，取奇数位（用户在上、AI在下的交替模式）
-        return this._alternating();
-      },
-      _alternating() {
-        const all = document.querySelectorAll('div[class*="message"] div[class*="markdown"], div[class*="msg-"] div[class*="content"]');
-        return Array.from(all).filter((_, i) => i % 2 === 0);
-      },
-    },
-
-    qwen: {
-      match: () => location.hostname === "chat.qwen.ai",
-      getUserMessages() {
-        const selectors = [
-          '[data-role="user"]',
-          '[data-message-role="user"]',
-          'div[class*="user-message"]',
-          'div[class*="UserMessage"]',
-          'div[class*="human"]',
-        ];
-        for (const sel of selectors) {
-          const msgs = Array.from(document.querySelectorAll(sel));
-          if (msgs.length > 0) return msgs;
-        }
-        // 兜底：右对齐的消息
-        const allBlocks = document.querySelectorAll('div[class*="message"]');
-        return Array.from(allBlocks).filter(el => {
-          const rect = el.getBoundingClientRect();
-          return rect.left > window.innerWidth * 0.4; // 偏右的是用户消息
+        const allMsgs = document.querySelectorAll('.ds-message');
+        return Array.from(allMsgs).filter(el => {
+          const parent = el.parentElement;
+          if (!parent) return false;
+          const style = window.getComputedStyle(parent);
+          return style.alignItems === 'flex-end';
         });
       },
     },
 
-    doubao: {
-      match: () => location.hostname === "www.doubao.com",
+    /* ---- 通义千问 Qwen (chat.qwen.ai) ----
+     *  用户消息: .qwen-chat-message-user
+     *  AI 回复:  .qwen-chat-message-assistant
+     */
+    qwen: {
+      match: () => location.hostname === "chat.qwen.ai",
       getUserMessages() {
-        const selectors = [
-          '[data-role="user"]',
-          '[data-testid*="user"]',
-          'div[class*="user-message"]',
-          'div[class*="human-message"]',
-          'div[class*="UserMessage"]',
-          'div[class*="chat-message--user"]',
-        ];
-        for (const sel of selectors) {
-          const msgs = Array.from(document.querySelectorAll(sel));
-          if (msgs.length > 0) return msgs;
-        }
-        // 兜底
-        const all = document.querySelectorAll('div[class*="message-content"], div[class*="chat-message"]');
-        return Array.from(all).filter((_, i) => i % 2 === 0);
+        let msgs = Array.from(
+          document.querySelectorAll('.qwen-chat-message-user')
+        );
+        if (msgs.length > 0) return msgs;
+
+        msgs = Array.from(document.querySelectorAll('.chat-user-message-container'));
+        if (msgs.length > 0) return msgs;
+
+        return Array.from(document.querySelectorAll('.chat-user-message'));
       },
     },
 
+    /* ---- 豆包 Doubao (www.doubao.com) ----
+     *  用户消息: [data-testid="send_message"]
+     *  AI 回复:  [data-testid="receive_message"]
+     */
+    doubao: {
+      match: () => location.hostname === "www.doubao.com",
+      getUserMessages() {
+        return Array.from(
+          document.querySelectorAll('[data-testid="send_message"]')
+        );
+      },
+    },
+
+    /* ---- Kimi (www.kimi.com) ----
+     *  用户消息: .segment-user 或 .chat-content-item-user
+     *  AI 回复:  .segment-assistant 或 .chat-content-item-assistant
+     */
     kimi: {
       match: () => location.hostname === "www.kimi.com",
       getUserMessages() {
-        const selectors = [
-          '[data-role="user"]',
-          '[data-author="user"]',
-          'div[class*="user-message"]',
-          'div[class*="UserMessage"]',
-          'div[class*="human"]',
-        ];
-        for (const sel of selectors) {
-          const msgs = Array.from(document.querySelectorAll(sel));
-          if (msgs.length > 0) return msgs;
-        }
-        // 兜底
-        const all = document.querySelectorAll('div[class*="message"]');
-        return Array.from(all).filter((_, i) => i % 2 === 0);
+        let msgs = Array.from(document.querySelectorAll('.segment-user'));
+        if (msgs.length > 0) return msgs;
+        return Array.from(document.querySelectorAll('.chat-content-item-user'));
       },
     },
   };
@@ -131,11 +107,9 @@
         '[data-role="user"]',
         '[data-message-role="user"]',
         '[data-author="user"]',
-        '[data-testid*="user"]',
-        'div[class*="user-msg"]',
-        'div[class*="user-message"]',
-        'div[class*="UserMessage"]',
-        'div[class*="human-message"]',
+        '[data-testid="send_message"]',
+        '.segment-user',
+        '.qwen-chat-message-user',
       ];
       for (const sel of selectors) {
         const msgs = Array.from(document.querySelectorAll(sel));
@@ -187,9 +161,9 @@
   let tooltip     = null;
   let visible     = true;
   let activeIndex = -1;
-  let lastCount   = 0;
-  let lastHash    = "";   // 用于检测消息内容变化
+  let lastHash    = "";
   let hoverTimer  = null;
+  let cachedRight = 0;   // 缓存的对话区域右边界
 
   /* ---------- 全局 Tooltip ---------- */
 
@@ -299,6 +273,56 @@
 
   /* ---------- 智能定位：基于消息元素实际位置 ---------- */
 
+  function measureChatRightEdge(msgs) {
+    let rightEdge = 0;
+
+    for (const msg of msgs) {
+      // 检查消息元素本身及其合理父级
+      let el = msg;
+      for (let i = 0; i < 5 && el; i++) {
+        const rect = el.getBoundingClientRect();
+        // 跳过不可见、全宽、或侧边栏里的元素
+        if (rect.width > 0 && rect.width < window.innerWidth * 0.85 && rect.left > 100) {
+          if (rect.right > rightEdge) {
+            rightEdge = rect.right;
+          }
+        }
+        el = el.parentElement;
+      }
+    }
+
+    // 也检查 AI 回复元素（它们通常更宽）
+    const assistantSelectors = [
+      '[data-message-author-role="assistant"]',        // ChatGPT
+      '[data-testid="receive_message"]',               // 豆包
+      '.qwen-chat-message-assistant',                  // Qwen
+      '.segment-assistant, .chat-content-item-assistant', // Kimi
+    ];
+    for (const sel of assistantSelectors) {
+      const els = document.querySelectorAll(sel);
+      for (const el of els) {
+        const rect = el.getBoundingClientRect();
+        if (rect.width > 0 && rect.width < window.innerWidth * 0.85 && rect.left > 100) {
+          if (rect.right > rightEdge) rightEdge = rect.right;
+        }
+      }
+      if (els.length > 0) break; // 找到一组就够了
+    }
+
+    // DeepSeek 特殊处理：AI 回复也是 .ds-message
+    if (location.hostname === "chat.deepseek.com") {
+      const allDs = document.querySelectorAll('.ds-message');
+      for (const el of allDs) {
+        const rect = el.getBoundingClientRect();
+        if (rect.width > 0 && rect.width < window.innerWidth * 0.85 && rect.left > 100) {
+          if (rect.right > rightEdge) rightEdge = rect.right;
+        }
+      }
+    }
+
+    return rightEdge;
+  }
+
   function updatePosition() {
     if (!timeline) return;
 
@@ -306,49 +330,66 @@
     let rightEdge = 0;
 
     if (msgs.length > 0) {
-      // 取所有用户消息中最大的 right 值，作为对话区域的右边界
-      // 同时也检查 AI 回复（紧跟在用户消息后面的兄弟元素）
-      for (const msg of msgs) {
-        const rect = msg.getBoundingClientRect();
-        if (rect.right > rightEdge) rightEdge = rect.right;
-
-        // 也检查消息的父容器（有些平台消息元素本身很窄，容器更宽）
-        let parent = msg.parentElement;
-        for (let i = 0; i < 3 && parent; i++) {
-          const pRect = parent.getBoundingClientRect();
-          // 只取合理宽度的容器（不要取 body 那么宽的）
-          if (pRect.width < window.innerWidth * 0.85 && pRect.right > rightEdge) {
-            rightEdge = pRect.right;
-          }
-          parent = parent.parentElement;
-        }
-      }
+      rightEdge = measureChatRightEdge(msgs);
     }
 
-    // 如果没有消息或检测失败，使用估算值
+    // 使用缓存，避免无消息时闪烁
+    if (rightEdge > 0) {
+      cachedRight = rightEdge;
+    } else {
+      rightEdge = cachedRight;
+    }
+
+    // 如果还是 0（首次且无消息），用估算值
     if (rightEdge === 0) {
-      // 大多数 AI 聊天页面对话区域居中，宽度约 48-52rem
-      rightEdge = window.innerWidth / 2 + 380;
+      rightEdge = window.innerWidth / 2 + 400;
     }
 
-    // 确保时间线不会太靠右（超出屏幕）也不会太靠左（进入对话区）
-    const timelineLeft = Math.min(
-      window.innerWidth - 50,        // 不超出屏幕
-      Math.max(rightEdge + 16, window.innerWidth / 2 + 100)  // 至少在中线右侧
-    );
+    // 时间线放在右边界 + 16px
+    const timelineLeft = rightEdge + 16;
+
+    // 安全边界：至少距离右边 40px
+    const maxLeft = window.innerWidth - 40;
+
+    const finalLeft = Math.min(timelineLeft, maxLeft);
 
     timeline.style.right = "auto";
-    timeline.style.left = timelineLeft + "px";
+    timeline.style.left = finalLeft + "px";
     toggleBtn.style.right = "auto";
-    toggleBtn.style.left = (timelineLeft + 4) + "px";
+    toggleBtn.style.left = (finalLeft + 4) + "px";
   }
 
   /* ---------- 文本提取 ---------- */
 
   function extractText(el) {
+    // 对于某些平台，消息元素包含按钮文字等，只取核心文本
+    // 优先找内部的纯文本容器
+    const innerSelectors = [
+      '.fbb737a4',           // DeepSeek 用户消息文本
+      '.chat-user-message',  // Qwen 用户消息文本
+      '.user-content',       // Kimi 用户消息文本
+      '[data-testid="message_text_content"]', // 豆包消息文本
+      '.whitespace-pre-wrap', // ChatGPT
+    ];
+
+    for (const sel of innerSelectors) {
+      const inner = el.querySelector(sel);
+      if (inner) {
+        const text = (inner.innerText || inner.textContent || "").trim();
+        if (text.length > 0) {
+          return text.length <= MAX_TEXT_LEN ? text : text.slice(0, MAX_TEXT_LEN) + "…";
+        }
+      }
+    }
+
+    // Fallback: 直接取元素文本
     const text = (el.innerText || el.textContent || "").trim().replace(/\n{3,}/g, "\n\n");
-    if (text.length <= MAX_TEXT_LEN) return text;
-    return text.slice(0, MAX_TEXT_LEN) + "…";
+    // 去掉常见的按钮文字
+    const cleaned = text
+      .replace(/编辑|复制|分享|重新生成|Regenerate/g, "")
+      .trim();
+    if (cleaned.length <= MAX_TEXT_LEN) return cleaned;
+    return cleaned.slice(0, MAX_TEXT_LEN) + "…";
   }
 
   /* ---------- 渲染 ---------- */
@@ -441,14 +482,12 @@
   function tick() {
     const msgs = getUserMessages();
 
-    // 用数量+首尾文本做简单 hash，检测变化
     const hash = msgs.length + "|" +
       (msgs[0]?.textContent?.slice(0, 20) || "") + "|" +
       (msgs[msgs.length - 1]?.textContent?.slice(0, 20) || "");
 
     if (hash !== lastHash) {
       lastHash = hash;
-      lastCount = msgs.length;
       render(msgs);
     }
 
@@ -479,6 +518,7 @@
     window.addEventListener("resize", () => {
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
+        cachedRight = 0; // 重置缓存，重新测量
         updatePosition();
       }, 150);
     });
@@ -493,16 +533,14 @@
     observer.observe(document.body, { childList: true, subtree: true });
   }
 
-  /* ---------- URL 变化检测 ---------- */
-
   function setupRouteListener() {
     let lastUrl = location.href;
     const check = () => {
       if (location.href !== lastUrl) {
         lastUrl = location.href;
         lastHash = "";
-        lastCount = 0;
         activeIndex = -1;
+        cachedRight = 0;
         currentAdapter = detectAdapter();
         setTimeout(tick, 500);
       }
