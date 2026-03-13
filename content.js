@@ -1,28 +1,286 @@
 /**
- * GPT Timeline — 星光时间线
+ * GPT Timeline — 星光时间线（多平台版）
  *
- * 在 ChatGPT 对话区域右侧渲染一条优雅的时间线。
- * Tooltip 挂在 document.body 上，不受任何容器 overflow 裁切。
+ * 支持：ChatGPT / DeepSeek / 通义千问(Qwen) / 豆包(Doubao) / Kimi
+ * 每个平台有独立的选择器适配，自动检测当前网站。
  */
 
 (() => {
   "use strict";
 
-  /* ---------- 常量 ---------- */
+  /* ================================================================
+   *  平台适配器
+   *  每个适配器提供:
+   *    - getUserMessages()  → 返回用户消息 DOM 元素数组
+   *    - getChatContainer() → 返回对话区域容器（用于定位）
+   * ================================================================ */
+
+  const ADAPTERS = {
+
+    /* ---- ChatGPT (chatgpt.com) ---- */
+    chatgpt: {
+      match: () => location.hostname === "chatgpt.com",
+
+      getUserMessages() {
+        // 主选择器: data-message-author-role
+        let msgs = Array.from(
+          document.querySelectorAll('[data-message-author-role="user"]')
+        );
+        // 兜底
+        if (msgs.length === 0) {
+          const turns = document.querySelectorAll('[data-testid^="conversation-turn-"]');
+          turns.forEach((turn, i) => {
+            if (i % 2 === 0) {
+              const text = turn.querySelector('.whitespace-pre-wrap');
+              if (text) msgs.push(text);
+            }
+          });
+        }
+        return msgs;
+      },
+
+      getChatContainer() {
+        return (
+          document.querySelector('main .xl\\:max-w-\\[48rem\\]') ||
+          document.querySelector('main [class*="max-w-"]') ||
+          document.querySelector('main .flex.flex-col.items-center') ||
+          document.querySelector('main article')?.parentElement?.parentElement
+        );
+      },
+    },
+
+    /* ---- DeepSeek (chat.deepseek.com) ---- */
+    deepseek: {
+      match: () => location.hostname === "chat.deepseek.com",
+
+      getUserMessages() {
+        // DeepSeek 用 .fbb737a4 作为用户消息容器，或 data-role="user"
+        let msgs = Array.from(
+          document.querySelectorAll('[data-role="user"]')
+        );
+        if (msgs.length === 0) {
+          // 通过消息对的结构：用户消息通常在 .dad65929（对话对）的第一个子块
+          msgs = Array.from(
+            document.querySelectorAll('.ds-message-user, div[class*="human"], div[class*="User"]')
+          );
+        }
+        if (msgs.length === 0) {
+          // 终极兜底：按对话交替模式，偶数位（0-indexed）是用户
+          const allMsgs = document.querySelectorAll('div[class*="message"] > div[class*="markdown"], div[class*="msg-content"]');
+          msgs = Array.from(allMsgs).filter((_, i) => i % 2 === 0);
+        }
+        return msgs;
+      },
+
+      getChatContainer() {
+        return (
+          document.querySelector('div[class*="chat-message-list"]') ||
+          document.querySelector('div[class*="conversation"]') ||
+          document.querySelector('#chat-container') ||
+          document.querySelector('main')
+        );
+      },
+    },
+
+    /* ---- 通义千问 Qwen (chat.qwen.ai) ---- */
+    qwen: {
+      match: () => location.hostname === "chat.qwen.ai",
+
+      getUserMessages() {
+        // Qwen 使用 data-role="user" 或 class 中含 "user" 的消息块
+        let msgs = Array.from(
+          document.querySelectorAll('[data-role="user"], [data-message-role="user"]')
+        );
+        if (msgs.length === 0) {
+          msgs = Array.from(
+            document.querySelectorAll('div[class*="user-message"], div[class*="UserMessage"], div[class*="human"]')
+          );
+        }
+        if (msgs.length === 0) {
+          // 兜底：右对齐的消息块通常是用户
+          const allBlocks = document.querySelectorAll('div[class*="message"]');
+          msgs = Array.from(allBlocks).filter(el => {
+            const style = window.getComputedStyle(el);
+            return style.alignSelf === 'flex-end' || el.className.includes('right');
+          });
+        }
+        return msgs;
+      },
+
+      getChatContainer() {
+        return (
+          document.querySelector('div[class*="chat-content"]') ||
+          document.querySelector('div[class*="conversation"]') ||
+          document.querySelector('main')
+        );
+      },
+    },
+
+    /* ---- 豆包 Doubao (www.doubao.com) ---- */
+    doubao: {
+      match: () => location.hostname === "www.doubao.com",
+
+      getUserMessages() {
+        // 豆包使用 data-testid 或 role 属性标识
+        let msgs = Array.from(
+          document.querySelectorAll('[data-role="user"], [data-testid*="user"]')
+        );
+        if (msgs.length === 0) {
+          msgs = Array.from(
+            document.querySelectorAll('div[class*="user-message"], div[class*="human-message"], div[class*="UserMessage"]')
+          );
+        }
+        if (msgs.length === 0) {
+          // 兜底：按交替模式
+          const allMsgs = document.querySelectorAll('div[class*="message-content"], div[class*="chat-message"]');
+          msgs = Array.from(allMsgs).filter((_, i) => i % 2 === 0);
+        }
+        return msgs;
+      },
+
+      getChatContainer() {
+        return (
+          document.querySelector('div[class*="chat-body"]') ||
+          document.querySelector('div[class*="conversation"]') ||
+          document.querySelector('main')
+        );
+      },
+    },
+
+    /* ---- Kimi (www.kimi.com) ---- */
+    kimi: {
+      match: () => location.hostname === "www.kimi.com",
+
+      getUserMessages() {
+        // Kimi 使用 data-role="user" 或特定 class
+        let msgs = Array.from(
+          document.querySelectorAll('[data-role="user"], [data-author="user"]')
+        );
+        if (msgs.length === 0) {
+          msgs = Array.from(
+            document.querySelectorAll('div[class*="user-message"], div[class*="UserMessage"], div[class*="human"]')
+          );
+        }
+        if (msgs.length === 0) {
+          // 兜底
+          const allMsgs = document.querySelectorAll('div[class*="message"]');
+          msgs = Array.from(allMsgs).filter((_, i) => i % 2 === 0);
+        }
+        return msgs;
+      },
+
+      getChatContainer() {
+        return (
+          document.querySelector('div[class*="chat-list"]') ||
+          document.querySelector('div[class*="conversation"]') ||
+          document.querySelector('main')
+        );
+      },
+    },
+  };
+
+  /* ================================================================
+   *  通用兜底适配器
+   *  当所有平台特定选择器都失败时，用通用启发式方法
+   * ================================================================ */
+
+  const UNIVERSAL_FALLBACK = {
+    getUserMessages() {
+      // 尝试所有常见的 data-role / data-message-author-role 属性
+      const selectors = [
+        '[data-message-author-role="user"]',
+        '[data-role="user"]',
+        '[data-message-role="user"]',
+        '[data-author="user"]',
+        '[data-testid*="user"]',
+      ];
+      for (const sel of selectors) {
+        const msgs = Array.from(document.querySelectorAll(sel));
+        if (msgs.length > 0) return msgs;
+      }
+
+      // 启发式：class 名中含 user/human 的消息块
+      const classPatterns = [
+        'div[class*="user-msg"]',
+        'div[class*="user-message"]',
+        'div[class*="UserMessage"]',
+        'div[class*="human-message"]',
+        'div[class*="human_message"]',
+      ];
+      for (const sel of classPatterns) {
+        const msgs = Array.from(document.querySelectorAll(sel));
+        if (msgs.length > 0) return msgs;
+      }
+
+      return [];
+    },
+
+    getChatContainer() {
+      return (
+        document.querySelector('main') ||
+        document.querySelector('[role="main"]') ||
+        document.body
+      );
+    },
+  };
+
+  /* ================================================================
+   *  检测当前平台
+   * ================================================================ */
+
+  let currentAdapter = null;
+
+  function detectAdapter() {
+    for (const [name, adapter] of Object.entries(ADAPTERS)) {
+      if (adapter.match()) {
+        console.log(`[GPT Timeline] Detected platform: ${name}`);
+        return adapter;
+      }
+    }
+    console.log("[GPT Timeline] No specific adapter matched, using universal fallback");
+    return null;
+  }
+
+  function getUserMessages() {
+    if (!currentAdapter) currentAdapter = detectAdapter();
+
+    // 先用平台适配器
+    if (currentAdapter) {
+      const msgs = currentAdapter.getUserMessages();
+      if (msgs.length > 0) return msgs;
+    }
+
+    // 回退到通用方法
+    return UNIVERSAL_FALLBACK.getUserMessages();
+  }
+
+  function getChatContainer() {
+    if (!currentAdapter) currentAdapter = detectAdapter();
+
+    if (currentAdapter) {
+      const container = currentAdapter.getChatContainer();
+      if (container) return container;
+    }
+
+    return UNIVERSAL_FALLBACK.getChatContainer();
+  }
+
+  /* ================================================================
+   *  以下是核心 UI 逻辑（与之前一致，不依赖具体平台）
+   * ================================================================ */
+
   const SCAN_INTERVAL   = 1500;
   const MAX_TEXT_LEN    = 300;
   const SCROLL_BEHAVIOR = "smooth";
 
-  /* ---------- 状态 ---------- */
   let timeline    = null;
   let toggleBtn   = null;
   let nodesWrap   = null;
-  let tooltip     = null;   // 全局唯一 tooltip，挂在 body
+  let tooltip     = null;
   let visible     = true;
   let activeIndex = -1;
   let lastCount   = 0;
   let hoverTimer  = null;
-  let scrollContainer = null;
 
   /* ---------- 全局 Tooltip ---------- */
 
@@ -46,31 +304,24 @@
   function showTooltip(nodeEl, idx, questionText) {
     if (!tooltip) return;
 
-    // 填充内容
     tooltip.querySelector(".tl-tooltip-num").textContent = `Question #${idx + 1}`;
     tooltip.querySelector(".tl-tooltip-text").textContent = questionText;
 
-    // 先设为可见但透明，用于测量尺寸
     tooltip.classList.remove("visible");
     tooltip.style.left = "-9999px";
     tooltip.style.top  = "0";
     tooltip.style.display = "block";
 
-    // 读取 tooltip 实际尺寸
     const tipRect  = tooltip.getBoundingClientRect();
     const nodeRect = nodeEl.getBoundingClientRect();
 
-    // 定位：tooltip 放在星星右侧，利用右边空白区域
     let top  = nodeRect.top + nodeRect.height / 2 - 22;
     let left = nodeRect.right + 10;
 
-    // 计算右侧可用空间
     const rightSpace = window.innerWidth - nodeRect.right - 10;
-    // 动态调整 tooltip 宽度以适应右侧空间
     const tooltipWidth = Math.min(320, Math.max(160, rightSpace - 16));
     tooltip.style.width = tooltipWidth + "px";
 
-    // 如果右侧空间实在太小（< 100px），才回退到左侧
     if (rightSpace < 100) {
       left = nodeRect.left - tipRect.width - 10;
       tooltip.style.width = "320px";
@@ -81,24 +332,19 @@
       tooltip.classList.remove("arrow-right");
     }
 
-    // 防止超出屏幕顶部/底部
     const margin = 8;
     if (top < margin) top = margin;
     if (top + tipRect.height > window.innerHeight - margin) {
       top = window.innerHeight - margin - tipRect.height;
     }
-
-    // 防止超出右侧
     if (left + tooltipWidth > window.innerWidth - margin) {
       left = window.innerWidth - margin - tooltipWidth;
     }
-    // 防止超出左侧
     if (left < margin) left = margin;
 
     tooltip.style.left = left + "px";
     tooltip.style.top  = top + "px";
 
-    // 显示
     requestAnimationFrame(() => {
       tooltip.classList.add("visible");
     });
@@ -127,7 +373,6 @@
 
     document.body.appendChild(timeline);
 
-    // 折叠按钮
     toggleBtn = document.createElement("button");
     toggleBtn.id = "gpt-timeline-toggle";
     toggleBtn.title = "Toggle Timeline";
@@ -148,19 +393,24 @@
   function updatePosition() {
     if (!timeline) return;
 
-    const chatArea =
-      document.querySelector('main .xl\\:max-w-\\[48rem\\]') ||
-      document.querySelector('main [class*="max-w-"]') ||
-      document.querySelector('main .flex.flex-col.items-center') ||
-      document.querySelector('main article')?.parentElement?.parentElement;
+    const chatArea = getChatContainer();
 
-    if (chatArea) {
+    if (chatArea && chatArea !== document.body) {
       const rect = chatArea.getBoundingClientRect();
       const rightEdge = rect.right;
-      timeline.style.right = "auto";
-      timeline.style.left = (rightEdge + 8) + "px";
-      toggleBtn.style.right = "auto";
-      toggleBtn.style.left = (rightEdge + 12) + "px";
+
+      // 如果右边空间太小，放在屏幕右侧
+      if (window.innerWidth - rightEdge < 50) {
+        timeline.style.left = "auto";
+        timeline.style.right = "12px";
+        toggleBtn.style.left = "auto";
+        toggleBtn.style.right = "12px";
+      } else {
+        timeline.style.right = "auto";
+        timeline.style.left = (rightEdge + 8) + "px";
+        toggleBtn.style.right = "auto";
+        toggleBtn.style.left = (rightEdge + 12) + "px";
+      }
     } else {
       timeline.style.left = "auto";
       timeline.style.right = Math.max(12, (window.innerWidth - 820) / 2 - 44) + "px";
@@ -169,25 +419,7 @@
     }
   }
 
-  /* ---------- 扫描用户消息 ---------- */
-
-  function getUserMessages() {
-    let msgs = Array.from(
-      document.querySelectorAll('[data-message-author-role="user"]')
-    );
-
-    if (msgs.length === 0) {
-      const turns = document.querySelectorAll('[data-testid^="conversation-turn-"]');
-      turns.forEach((turn, i) => {
-        if (i % 2 === 0) {
-          const text = turn.querySelector('.whitespace-pre-wrap');
-          if (text) msgs.push(text);
-        }
-      });
-    }
-
-    return msgs;
-  }
+  /* ---------- 文本提取 ---------- */
 
   function extractText(el) {
     const text = (el.innerText || el.textContent || "").trim().replace(/\n{3,}/g, "\n\n");
@@ -197,7 +429,6 @@
 
   /* ---------- 渲染 ---------- */
 
-  // 保存每个节点对应的消息元素和文本
   let nodeData = [];
 
   function render(messages) {
@@ -223,7 +454,6 @@
       node.appendChild(star);
       node.appendChild(badge);
 
-      // Hover → 显示全局 tooltip
       node.addEventListener("mouseenter", () => {
         clearTimeout(hoverTimer);
         showTooltip(node, idx, questionText);
@@ -233,7 +463,6 @@
         hoverTimer = setTimeout(hideTooltip, 120);
       });
 
-      // 点击跳转
       node.addEventListener("click", () => {
         el.scrollIntoView({ behavior: SCROLL_BEHAVIOR, block: "center" });
         setActive(idx);
@@ -271,7 +500,7 @@
     }
   }
 
-  /* ---------- Tooltip 也可以 hover（便于滚动长内容） ---------- */
+  /* ---------- Tooltip hover ---------- */
 
   function setupTooltipHover() {
     if (!tooltip) return;
@@ -312,7 +541,6 @@
         if (msgs.length) updateActiveByScroll(msgs);
       }, 100);
     };
-
     window.addEventListener("scroll", handler, true);
   }
 
@@ -331,9 +559,29 @@
     observer.observe(document.body, { childList: true, subtree: true });
   }
 
+  /* ---------- URL 变化检测（SPA 路由切换） ---------- */
+
+  function setupRouteListener() {
+    let lastUrl = location.href;
+    const check = () => {
+      if (location.href !== lastUrl) {
+        lastUrl = location.href;
+        lastCount = 0;
+        activeIndex = -1;
+        currentAdapter = detectAdapter();
+        setTimeout(tick, 500);
+      }
+    };
+    // 监听 popstate
+    window.addEventListener("popstate", check);
+    // 定期检查（pushState 不触发 popstate）
+    setInterval(check, 1000);
+  }
+
   /* ---------- 入口 ---------- */
 
   function init() {
+    currentAdapter = detectAdapter();
     createTooltip();
     createTimeline();
     setupTooltipHover();
@@ -342,6 +590,7 @@
     setupScrollListener();
     setupResizeListener();
     setupObserver();
+    setupRouteListener();
   }
 
   if (document.readyState === "loading") {

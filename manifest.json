@@ -1,12 +1,18 @@
 {
   "manifest_version": 3,
   "name": "GPT Timeline",
-  "version": "1.0.0",
-  "description": "在 ChatGPT 页面右侧显示问题时间线，快速跳转到对应问题",
+  "version": "1.1.0",
+  "description": "在 AI 聊天页面右侧显示问题时间线，快速跳转到对应问题。支持 ChatGPT / DeepSeek / 通义千问 / 豆包 / Kimi",
   "permissions": [],
   "content_scripts": [
     {
-      "matches": ["https://chatgpt.com/*"],
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://chat.deepseek.com/*",
+        "https://chat.qwen.ai/*",
+        "https://www.doubao.com/chat/*",
+        "https://www.kimi.com/*"
+      ],
       "js": ["content.js"],
       "css": ["styles.css"],
       "run_at": "document_idle"

@@ -1,9 +1,19 @@
 # ✦ GPT Timeline
 
-A minimal Chrome extension that adds a starlight timeline to [ChatGPT](https://chatgpt.com/), helping you navigate long conversations effortlessly.
+A minimal Chrome extension that adds a starlight timeline to AI chat pages, helping you navigate long conversations effortlessly.
 
 ![Chrome Extension](https://img.shields.io/badge/Chrome-Extension-blue?logo=googlechrome&logoColor=white)
 ![Manifest V3](https://img.shields.io/badge/Manifest-V3-green)
+
+### Supported Platforms
+
+| Platform | URL |
+|----------|-----|
+| ChatGPT | https://chatgpt.com/ |
+| DeepSeek | https://chat.deepseek.com/ |
+| 通义千问 Qwen | https://chat.qwen.ai/ |
+| 豆包 Doubao | https://www.doubao.com/chat/ |
+| Kimi | https://www.kimi.com/ |
 
 ## What it does
 
@@ -86,13 +96,15 @@ gpt-timeline/
 ## Requirements
 
 - Google Chrome (or any Chromium-based browser)
-- Works on `https://chatgpt.com/*`
+- Works on ChatGPT, DeepSeek, Qwen, Doubao, Kimi (see supported platforms above)
+- Each platform has its own DOM adapter with multiple fallback selectors
 
 ## Notes
 
 - The extension scans for user messages every 1.5 seconds and on DOM changes
 - No data is collected or sent anywhere — everything runs locally
-- If ChatGPT updates its DOM structure, the selectors may need updating
+- If a platform updates its DOM structure, the selectors may need updating — check the `ADAPTERS` object in `content.js`
+- Adding a new platform: add an adapter entry in `content.js` and a URL pattern in `manifest.json`
 
 ## License
 
