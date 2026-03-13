@@ -2,31 +2,26 @@
  * GPT Timeline — 星光时间线（多平台版）
  *
  * 支持：ChatGPT / DeepSeek / 通义千问(Qwen) / 豆包(Doubao) / Kimi
- * 每个平台有独立的选择器适配，自动检测当前网站。
+ * 
+ * 定位策略：不依赖容器选择器，而是直接测量用户消息元素的位置，
+ * 取所有消息的最大 right 值作为对话区域右边界，时间线贴在它旁边。
  */
 
 (() => {
   "use strict";
 
   /* ================================================================
-   *  平台适配器
-   *  每个适配器提供:
-   *    - getUserMessages()  → 返回用户消息 DOM 元素数组
-   *    - getChatContainer() → 返回对话区域容器（用于定位）
+   *  平台适配器 — 只负责找用户消息元素
    * ================================================================ */
 
   const ADAPTERS = {
 
-    /* ---- ChatGPT (chatgpt.com) ---- */
     chatgpt: {
       match: () => location.hostname === "chatgpt.com",
-
       getUserMessages() {
-        // 主选择器: data-message-author-role
         let msgs = Array.from(
           document.querySelectorAll('[data-message-author-role="user"]')
         );
-        // 兜底
         if (msgs.length === 0) {
           const turns = document.querySelectorAll('[data-testid^="conversation-turn-"]');
           turns.forEach((turn, i) => {
@@ -38,194 +33,120 @@
         }
         return msgs;
       },
-
-      getChatContainer() {
-        return (
-          document.querySelector('main .xl\\:max-w-\\[48rem\\]') ||
-          document.querySelector('main [class*="max-w-"]') ||
-          document.querySelector('main .flex.flex-col.items-center') ||
-          document.querySelector('main article')?.parentElement?.parentElement
-        );
-      },
     },
 
-    /* ---- DeepSeek (chat.deepseek.com) ---- */
     deepseek: {
       match: () => location.hostname === "chat.deepseek.com",
-
       getUserMessages() {
-        // DeepSeek 用 .fbb737a4 作为用户消息容器，或 data-role="user"
-        let msgs = Array.from(
-          document.querySelectorAll('[data-role="user"]')
-        );
-        if (msgs.length === 0) {
-          // 通过消息对的结构：用户消息通常在 .dad65929（对话对）的第一个子块
-          msgs = Array.from(
-            document.querySelectorAll('.ds-message-user, div[class*="human"], div[class*="User"]')
-          );
+        // DeepSeek: 用户消息在 .fa81 或带 data-role 的元素中
+        const selectors = [
+          '[data-role="user"]',
+          '.ds-message-user',
+          'div[class*="human"]',
+          'div[class*="User"]',
+        ];
+        for (const sel of selectors) {
+          const msgs = Array.from(document.querySelectorAll(sel));
+          if (msgs.length > 0) return msgs;
         }
-        if (msgs.length === 0) {
-          // 终极兜底：按对话交替模式，偶数位（0-indexed）是用户
-          const allMsgs = document.querySelectorAll('div[class*="message"] > div[class*="markdown"], div[class*="msg-content"]');
-          msgs = Array.from(allMsgs).filter((_, i) => i % 2 === 0);
-        }
-        return msgs;
+        // 兜底：找所有对话 bubble，取奇数位（用户在上、AI在下的交替模式）
+        return this._alternating();
       },
-
-      getChatContainer() {
-        return (
-          document.querySelector('div[class*="chat-message-list"]') ||
-          document.querySelector('div[class*="conversation"]') ||
-          document.querySelector('#chat-container') ||
-          document.querySelector('main')
-        );
+      _alternating() {
+        const all = document.querySelectorAll('div[class*="message"] div[class*="markdown"], div[class*="msg-"] div[class*="content"]');
+        return Array.from(all).filter((_, i) => i % 2 === 0);
       },
     },
 
-    /* ---- 通义千问 Qwen (chat.qwen.ai) ---- */
     qwen: {
       match: () => location.hostname === "chat.qwen.ai",
-
       getUserMessages() {
-        // Qwen 使用 data-role="user" 或 class 中含 "user" 的消息块
-        let msgs = Array.from(
-          document.querySelectorAll('[data-role="user"], [data-message-role="user"]')
-        );
-        if (msgs.length === 0) {
-          msgs = Array.from(
-            document.querySelectorAll('div[class*="user-message"], div[class*="UserMessage"], div[class*="human"]')
-          );
+        const selectors = [
+          '[data-role="user"]',
+          '[data-message-role="user"]',
+          'div[class*="user-message"]',
+          'div[class*="UserMessage"]',
+          'div[class*="human"]',
+        ];
+        for (const sel of selectors) {
+          const msgs = Array.from(document.querySelectorAll(sel));
+          if (msgs.length > 0) return msgs;
         }
-        if (msgs.length === 0) {
-          // 兜底：右对齐的消息块通常是用户
-          const allBlocks = document.querySelectorAll('div[class*="message"]');
-          msgs = Array.from(allBlocks).filter(el => {
-            const style = window.getComputedStyle(el);
-            return style.alignSelf === 'flex-end' || el.className.includes('right');
-          });
-        }
-        return msgs;
-      },
-
-      getChatContainer() {
-        return (
-          document.querySelector('div[class*="chat-content"]') ||
-          document.querySelector('div[class*="conversation"]') ||
-          document.querySelector('main')
-        );
+        // 兜底：右对齐的消息
+        const allBlocks = document.querySelectorAll('div[class*="message"]');
+        return Array.from(allBlocks).filter(el => {
+          const rect = el.getBoundingClientRect();
+          return rect.left > window.innerWidth * 0.4; // 偏右的是用户消息
+        });
       },
     },
 
-    /* ---- 豆包 Doubao (www.doubao.com) ---- */
     doubao: {
       match: () => location.hostname === "www.doubao.com",
-
       getUserMessages() {
-        // 豆包使用 data-testid 或 role 属性标识
-        let msgs = Array.from(
-          document.querySelectorAll('[data-role="user"], [data-testid*="user"]')
-        );
-        if (msgs.length === 0) {
-          msgs = Array.from(
-            document.querySelectorAll('div[class*="user-message"], div[class*="human-message"], div[class*="UserMessage"]')
-          );
+        const selectors = [
+          '[data-role="user"]',
+          '[data-testid*="user"]',
+          'div[class*="user-message"]',
+          'div[class*="human-message"]',
+          'div[class*="UserMessage"]',
+          'div[class*="chat-message--user"]',
+        ];
+        for (const sel of selectors) {
+          const msgs = Array.from(document.querySelectorAll(sel));
+          if (msgs.length > 0) return msgs;
         }
-        if (msgs.length === 0) {
-          // 兜底：按交替模式
-          const allMsgs = document.querySelectorAll('div[class*="message-content"], div[class*="chat-message"]');
-          msgs = Array.from(allMsgs).filter((_, i) => i % 2 === 0);
-        }
-        return msgs;
-      },
-
-      getChatContainer() {
-        return (
-          document.querySelector('div[class*="chat-body"]') ||
-          document.querySelector('div[class*="conversation"]') ||
-          document.querySelector('main')
-        );
+        // 兜底
+        const all = document.querySelectorAll('div[class*="message-content"], div[class*="chat-message"]');
+        return Array.from(all).filter((_, i) => i % 2 === 0);
       },
     },
 
-    /* ---- Kimi (www.kimi.com) ---- */
     kimi: {
       match: () => location.hostname === "www.kimi.com",
-
       getUserMessages() {
-        // Kimi 使用 data-role="user" 或特定 class
-        let msgs = Array.from(
-          document.querySelectorAll('[data-role="user"], [data-author="user"]')
-        );
-        if (msgs.length === 0) {
-          msgs = Array.from(
-            document.querySelectorAll('div[class*="user-message"], div[class*="UserMessage"], div[class*="human"]')
-          );
+        const selectors = [
+          '[data-role="user"]',
+          '[data-author="user"]',
+          'div[class*="user-message"]',
+          'div[class*="UserMessage"]',
+          'div[class*="human"]',
+        ];
+        for (const sel of selectors) {
+          const msgs = Array.from(document.querySelectorAll(sel));
+          if (msgs.length > 0) return msgs;
         }
-        if (msgs.length === 0) {
-          // 兜底
-          const allMsgs = document.querySelectorAll('div[class*="message"]');
-          msgs = Array.from(allMsgs).filter((_, i) => i % 2 === 0);
-        }
-        return msgs;
-      },
-
-      getChatContainer() {
-        return (
-          document.querySelector('div[class*="chat-list"]') ||
-          document.querySelector('div[class*="conversation"]') ||
-          document.querySelector('main')
-        );
+        // 兜底
+        const all = document.querySelectorAll('div[class*="message"]');
+        return Array.from(all).filter((_, i) => i % 2 === 0);
       },
     },
   };
 
-  /* ================================================================
-   *  通用兜底适配器
-   *  当所有平台特定选择器都失败时，用通用启发式方法
-   * ================================================================ */
-
+  /* 通用兜底 */
   const UNIVERSAL_FALLBACK = {
     getUserMessages() {
-      // 尝试所有常见的 data-role / data-message-author-role 属性
       const selectors = [
         '[data-message-author-role="user"]',
         '[data-role="user"]',
         '[data-message-role="user"]',
         '[data-author="user"]',
         '[data-testid*="user"]',
+        'div[class*="user-msg"]',
+        'div[class*="user-message"]',
+        'div[class*="UserMessage"]',
+        'div[class*="human-message"]',
       ];
       for (const sel of selectors) {
         const msgs = Array.from(document.querySelectorAll(sel));
         if (msgs.length > 0) return msgs;
       }
-
-      // 启发式：class 名中含 user/human 的消息块
-      const classPatterns = [
-        'div[class*="user-msg"]',
-        'div[class*="user-message"]',
-        'div[class*="UserMessage"]',
-        'div[class*="human-message"]',
-        'div[class*="human_message"]',
-      ];
-      for (const sel of classPatterns) {
-        const msgs = Array.from(document.querySelectorAll(sel));
-        if (msgs.length > 0) return msgs;
-      }
-
       return [];
-    },
-
-    getChatContainer() {
-      return (
-        document.querySelector('main') ||
-        document.querySelector('[role="main"]') ||
-        document.body
-      );
     },
   };
 
   /* ================================================================
-   *  检测当前平台
+   *  平台检测
    * ================================================================ */
 
   let currentAdapter = null;
@@ -237,36 +158,23 @@
         return adapter;
       }
     }
-    console.log("[GPT Timeline] No specific adapter matched, using universal fallback");
+    console.log("[GPT Timeline] Using universal fallback");
     return null;
   }
 
   function getUserMessages() {
     if (!currentAdapter) currentAdapter = detectAdapter();
 
-    // 先用平台适配器
     if (currentAdapter) {
       const msgs = currentAdapter.getUserMessages();
       if (msgs.length > 0) return msgs;
     }
 
-    // 回退到通用方法
     return UNIVERSAL_FALLBACK.getUserMessages();
   }
 
-  function getChatContainer() {
-    if (!currentAdapter) currentAdapter = detectAdapter();
-
-    if (currentAdapter) {
-      const container = currentAdapter.getChatContainer();
-      if (container) return container;
-    }
-
-    return UNIVERSAL_FALLBACK.getChatContainer();
-  }
-
   /* ================================================================
-   *  以下是核心 UI 逻辑（与之前一致，不依赖具体平台）
+   *  核心 UI
    * ================================================================ */
 
   const SCAN_INTERVAL   = 1500;
@@ -280,6 +188,7 @@
   let visible     = true;
   let activeIndex = -1;
   let lastCount   = 0;
+  let lastHash    = "";   // 用于检测消息内容变化
   let hoverTimer  = null;
 
   /* ---------- 全局 Tooltip ---------- */
@@ -388,35 +297,50 @@
     updatePosition();
   }
 
-  /* ---------- 动态定位 ---------- */
+  /* ---------- 智能定位：基于消息元素实际位置 ---------- */
 
   function updatePosition() {
     if (!timeline) return;
 
-    const chatArea = getChatContainer();
+    const msgs = getUserMessages();
+    let rightEdge = 0;
 
-    if (chatArea && chatArea !== document.body) {
-      const rect = chatArea.getBoundingClientRect();
-      const rightEdge = rect.right;
+    if (msgs.length > 0) {
+      // 取所有用户消息中最大的 right 值，作为对话区域的右边界
+      // 同时也检查 AI 回复（紧跟在用户消息后面的兄弟元素）
+      for (const msg of msgs) {
+        const rect = msg.getBoundingClientRect();
+        if (rect.right > rightEdge) rightEdge = rect.right;
 
-      // 如果右边空间太小，放在屏幕右侧
-      if (window.innerWidth - rightEdge < 50) {
-        timeline.style.left = "auto";
-        timeline.style.right = "12px";
-        toggleBtn.style.left = "auto";
-        toggleBtn.style.right = "12px";
-      } else {
-        timeline.style.right = "auto";
-        timeline.style.left = (rightEdge + 8) + "px";
-        toggleBtn.style.right = "auto";
-        toggleBtn.style.left = (rightEdge + 12) + "px";
+        // 也检查消息的父容器（有些平台消息元素本身很窄，容器更宽）
+        let parent = msg.parentElement;
+        for (let i = 0; i < 3 && parent; i++) {
+          const pRect = parent.getBoundingClientRect();
+          // 只取合理宽度的容器（不要取 body 那么宽的）
+          if (pRect.width < window.innerWidth * 0.85 && pRect.right > rightEdge) {
+            rightEdge = pRect.right;
+          }
+          parent = parent.parentElement;
+        }
       }
-    } else {
-      timeline.style.left = "auto";
-      timeline.style.right = Math.max(12, (window.innerWidth - 820) / 2 - 44) + "px";
-      toggleBtn.style.left = "auto";
-      toggleBtn.style.right = timeline.style.right;
     }
+
+    // 如果没有消息或检测失败，使用估算值
+    if (rightEdge === 0) {
+      // 大多数 AI 聊天页面对话区域居中，宽度约 48-52rem
+      rightEdge = window.innerWidth / 2 + 380;
+    }
+
+    // 确保时间线不会太靠右（超出屏幕）也不会太靠左（进入对话区）
+    const timelineLeft = Math.min(
+      window.innerWidth - 50,        // 不超出屏幕
+      Math.max(rightEdge + 16, window.innerWidth / 2 + 100)  // 至少在中线右侧
+    );
+
+    timeline.style.right = "auto";
+    timeline.style.left = timelineLeft + "px";
+    toggleBtn.style.right = "auto";
+    toggleBtn.style.left = (timelineLeft + 4) + "px";
   }
 
   /* ---------- 文本提取 ---------- */
@@ -517,7 +441,13 @@
   function tick() {
     const msgs = getUserMessages();
 
-    if (msgs.length !== lastCount) {
+    // 用数量+首尾文本做简单 hash，检测变化
+    const hash = msgs.length + "|" +
+      (msgs[0]?.textContent?.slice(0, 20) || "") + "|" +
+      (msgs[msgs.length - 1]?.textContent?.slice(0, 20) || "");
+
+    if (hash !== lastHash) {
+      lastHash = hash;
       lastCount = msgs.length;
       render(msgs);
     }
@@ -548,33 +478,36 @@
     let timer = null;
     window.addEventListener("resize", () => {
       if (timer) clearTimeout(timer);
-      timer = setTimeout(updatePosition, 150);
+      timer = setTimeout(() => {
+        updatePosition();
+      }, 150);
     });
   }
 
   function setupObserver() {
+    let timer = null;
     const observer = new MutationObserver(() => {
-      setTimeout(tick, 300);
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(tick, 300);
     });
     observer.observe(document.body, { childList: true, subtree: true });
   }
 
-  /* ---------- URL 变化检测（SPA 路由切换） ---------- */
+  /* ---------- URL 变化检测 ---------- */
 
   function setupRouteListener() {
     let lastUrl = location.href;
     const check = () => {
       if (location.href !== lastUrl) {
         lastUrl = location.href;
+        lastHash = "";
         lastCount = 0;
         activeIndex = -1;
         currentAdapter = detectAdapter();
         setTimeout(tick, 500);
       }
     };
-    // 监听 popstate
     window.addEventListener("popstate", check);
-    // 定期检查（pushState 不触发 popstate）
     setInterval(check, 1000);
   }
 
