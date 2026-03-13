@@ -2,7 +2,7 @@
  * GPT Timeline — 星光时间线
  *
  * 在 ChatGPT 对话区域右侧渲染一条优雅的时间线。
- * 每个用户提问对应一个星星圆点，悬停显示问题摘要 + 星芒动效，点击平滑滚动。
+ * Tooltip 挂在 document.body 上，不受任何容器 overflow 裁切。
  */
 
 (() => {
@@ -10,19 +10,85 @@
 
   /* ---------- 常量 ---------- */
   const SCAN_INTERVAL   = 1500;
-  const PREVIEW_LEN     = 200;  // tooltip 最多显示的字符数
+  const MAX_TEXT_LEN    = 300;
   const SCROLL_BEHAVIOR = "smooth";
 
   /* ---------- 状态 ---------- */
   let timeline    = null;
   let toggleBtn   = null;
   let nodesWrap   = null;
+  let tooltip     = null;   // 全局唯一 tooltip，挂在 body
   let visible     = true;
   let activeIndex = -1;
   let lastCount   = 0;
+  let hoverTimer  = null;
   let scrollContainer = null;
 
-  /* ---------- DOM 创建 ---------- */
+  /* ---------- 全局 Tooltip ---------- */
+
+  function createTooltip() {
+    if (document.getElementById("gpt-tl-tooltip")) return;
+
+    tooltip = document.createElement("div");
+    tooltip.id = "gpt-tl-tooltip";
+
+    const num = document.createElement("span");
+    num.className = "tl-tooltip-num";
+
+    const text = document.createElement("span");
+    text.className = "tl-tooltip-text";
+
+    tooltip.appendChild(num);
+    tooltip.appendChild(text);
+    document.body.appendChild(tooltip);
+  }
+
+  function showTooltip(nodeEl, idx, questionText) {
+    if (!tooltip) return;
+
+    // 填充内容
+    tooltip.querySelector(".tl-tooltip-num").textContent = `Question #${idx + 1}`;
+    tooltip.querySelector(".tl-tooltip-text").textContent = questionText;
+
+    // 先设为可见但透明，用于测量尺寸
+    tooltip.classList.remove("visible");
+    tooltip.style.left = "-9999px";
+    tooltip.style.top  = "0";
+    tooltip.style.display = "block";
+
+    // 读取 tooltip 实际尺寸
+    const tipRect  = tooltip.getBoundingClientRect();
+    const nodeRect = nodeEl.getBoundingClientRect();
+
+    // 定位：tooltip 右侧对齐星星左侧，垂直居中
+    let top  = nodeRect.top + nodeRect.height / 2 - 22; // 箭头大约在 18px 处
+    let left = nodeRect.left - tipRect.width - 10;
+
+    // 防止超出屏幕顶部/底部
+    const margin = 8;
+    if (top < margin) top = margin;
+    if (top + tipRect.height > window.innerHeight - margin) {
+      top = window.innerHeight - margin - tipRect.height;
+    }
+
+    // 防止超出左侧
+    if (left < margin) left = margin;
+
+    tooltip.style.left = left + "px";
+    tooltip.style.top  = top + "px";
+
+    // 显示
+    requestAnimationFrame(() => {
+      tooltip.classList.add("visible");
+    });
+  }
+
+  function hideTooltip() {
+    if (!tooltip) return;
+    tooltip.classList.remove("visible");
+  }
+
+  /* ---------- DOM 容器 ---------- */
 
   function createTimeline() {
     if (document.getElementById("gpt-timeline")) return;
@@ -49,19 +115,18 @@
       visible = !visible;
       timeline.classList.toggle("hidden", !visible);
       toggleBtn.innerHTML = visible ? "✦" : "✧";
+      if (!visible) hideTooltip();
     });
     document.body.appendChild(toggleBtn);
 
-    // 初始定位
     updatePosition();
   }
 
-  /* ---------- 动态定位：紧贴对话框右侧 ---------- */
+  /* ---------- 动态定位 ---------- */
 
   function updatePosition() {
     if (!timeline) return;
 
-    // 尝试找到 ChatGPT 的对话容器
     const chatArea =
       document.querySelector('main .xl\\:max-w-\\[48rem\\]') ||
       document.querySelector('main [class*="max-w-"]') ||
@@ -76,35 +141,11 @@
       toggleBtn.style.right = "auto";
       toggleBtn.style.left = (rightEdge + 12) + "px";
     } else {
-      // fallback：基于视口宽度估算
       timeline.style.left = "auto";
       timeline.style.right = Math.max(12, (window.innerWidth - 820) / 2 - 44) + "px";
       toggleBtn.style.left = "auto";
       toggleBtn.style.right = timeline.style.right;
     }
-  }
-
-  /* ---------- 查找滚动容器 ---------- */
-
-  function findScrollContainer() {
-    if (scrollContainer && document.contains(scrollContainer)) return scrollContainer;
-
-    // ChatGPT 的主滚动区域
-    const candidates = [
-      document.querySelector('main div[class*="overflow-y"]'),
-      document.querySelector('main .flex-1.overflow-hidden > div'),
-      document.querySelector('[role="presentation"]'),
-      document.querySelector('main'),
-    ];
-
-    for (const el of candidates) {
-      if (el && el.scrollHeight > el.clientHeight) {
-        scrollContainer = el;
-        return el;
-      }
-    }
-
-    return document.documentElement;
   }
 
   /* ---------- 扫描用户消息 ---------- */
@@ -115,7 +156,6 @@
     );
 
     if (msgs.length === 0) {
-      // 兜底选择器
       const turns = document.querySelectorAll('[data-testid^="conversation-turn-"]');
       turns.forEach((turn, i) => {
         if (i % 2 === 0) {
@@ -128,60 +168,54 @@
     return msgs;
   }
 
-  function extractPreview(el) {
-    const text = (el.innerText || el.textContent || "").trim().replace(/\n+/g, " ");
-    if (text.length <= PREVIEW_LEN) return text;
-    return text.slice(0, PREVIEW_LEN) + "…";
+  function extractText(el) {
+    const text = (el.innerText || el.textContent || "").trim().replace(/\n{3,}/g, "\n\n");
+    if (text.length <= MAX_TEXT_LEN) return text;
+    return text.slice(0, MAX_TEXT_LEN) + "…";
   }
 
   /* ---------- 渲染 ---------- */
 
+  // 保存每个节点对应的消息元素和文本
+  let nodeData = [];
+
   function render(messages) {
     if (!nodesWrap) return;
-
     nodesWrap.innerHTML = "";
+    nodeData = [];
 
     messages.forEach((el, idx) => {
+      const questionText = extractText(el);
+      nodeData.push({ el, text: questionText });
+
       const node = document.createElement("div");
       node.className = "tl-node";
       if (idx === activeIndex) node.classList.add("active");
 
-      // 星星
       const star = document.createElement("div");
       star.className = "tl-star";
 
-      // Tooltip — 显示完整问题
-      const tip = document.createElement("span");
-      tip.className = "tl-tooltip";
-
-      const tipNum = document.createElement("span");
-      tipNum.className = "tl-tooltip-num";
-      tipNum.textContent = `Question #${idx + 1}`;
-
-      const tipText = document.createElement("span");
-      tipText.className = "tl-tooltip-text";
-      tipText.textContent = extractPreview(el);
-
-      tip.appendChild(tipNum);
-      tip.appendChild(tipText);
-
-      // 序号
       const badge = document.createElement("span");
       badge.className = "tl-badge";
       badge.textContent = idx + 1;
 
       node.appendChild(star);
-      node.appendChild(tip);
       node.appendChild(badge);
 
+      // Hover → 显示全局 tooltip
+      node.addEventListener("mouseenter", () => {
+        clearTimeout(hoverTimer);
+        showTooltip(node, idx, questionText);
+      });
+
+      node.addEventListener("mouseleave", () => {
+        hoverTimer = setTimeout(hideTooltip, 120);
+      });
+
+      // 点击跳转
       node.addEventListener("click", () => {
         el.scrollIntoView({ behavior: SCROLL_BEHAVIOR, block: "center" });
         setActive(idx);
-      });
-
-      // 涟漪效果
-      node.addEventListener("mouseenter", () => {
-        star.style.transition = "all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)";
       });
 
       nodesWrap.appendChild(node);
@@ -216,6 +250,18 @@
     }
   }
 
+  /* ---------- Tooltip 也可以 hover（便于滚动长内容） ---------- */
+
+  function setupTooltipHover() {
+    if (!tooltip) return;
+    tooltip.addEventListener("mouseenter", () => {
+      clearTimeout(hoverTimer);
+    });
+    tooltip.addEventListener("mouseleave", () => {
+      hoverTimer = setTimeout(hideTooltip, 100);
+    });
+  }
+
   /* ---------- 主循环 ---------- */
 
   function tick() {
@@ -233,7 +279,7 @@
     updatePosition();
   }
 
-  /* ---------- 滚动监听 ---------- */
+  /* ---------- 监听 ---------- */
 
   function setupScrollListener() {
     let timer = null;
@@ -246,17 +292,8 @@
       }, 100);
     };
 
-    // 监听 window
     window.addEventListener("scroll", handler, true);
-
-    // 同时监听内部容器
-    const container = findScrollContainer();
-    if (container && container !== document.documentElement) {
-      container.addEventListener("scroll", handler, { passive: true });
-    }
   }
-
-  /* ---------- resize 响应 ---------- */
 
   function setupResizeListener() {
     let timer = null;
@@ -265,8 +302,6 @@
       timer = setTimeout(updatePosition, 150);
     });
   }
-
-  /* ---------- MutationObserver ---------- */
 
   function setupObserver() {
     const observer = new MutationObserver(() => {
@@ -278,7 +313,9 @@
   /* ---------- 入口 ---------- */
 
   function init() {
+    createTooltip();
     createTimeline();
+    setupTooltipHover();
     tick();
     setInterval(tick, SCAN_INTERVAL);
     setupScrollListener();

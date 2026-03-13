@@ -12,11 +12,10 @@
   pointer-events: auto;
   padding: 60px 0 32px 0;
   width: 32px;
-  /* 默认位置，JS 会动态计算 */
   right: calc(50% - 400px - 44px);
 }
 
-/* 垂直连接线 — 淡淡的、优雅的 */
+/* 垂直连接线 */
 #gpt-timeline .tl-track {
   position: absolute;
   width: 1px;
@@ -35,7 +34,7 @@
   );
 }
 
-/* 节点容器 */
+/* 节点容器 — 不再裁切溢出 */
 #gpt-timeline .tl-nodes {
   position: relative;
   display: flex;
@@ -45,6 +44,7 @@
   width: 100%;
   height: 100%;
   overflow-y: auto;
+  overflow-x: visible;
   scrollbar-width: none;
   justify-content: center;
 }
@@ -65,7 +65,7 @@
   flex-shrink: 0;
 }
 
-/* ★ 星星圆点 — 默认态：微弱光芒 */
+/* ★ 星星圆点 — 默认态 */
 #gpt-timeline .tl-star {
   width: 6px;
   height: 6px;
@@ -88,7 +88,6 @@
   transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* 横线 */
 #gpt-timeline .tl-star::before {
   width: 0;
   height: 1px;
@@ -97,7 +96,6 @@
   transform: translate(-50%, -50%);
 }
 
-/* 竖线 */
 #gpt-timeline .tl-star::after {
   width: 1px;
   height: 0;
@@ -106,7 +104,7 @@
   transform: translate(-50%, -50%);
 }
 
-/* ★ Hover 态：星星发光 + 星芒展开 */
+/* ★ Hover 态 */
 #gpt-timeline .tl-node:hover .tl-star {
   width: 8px;
   height: 8px;
@@ -127,7 +125,7 @@
   background: rgba(255, 255, 255, 0.35);
 }
 
-/* ★ Active 态：当前问题 — 温暖的绿光 */
+/* ★ Active 态 */
 #gpt-timeline .tl-node.active .tl-star {
   width: 8px;
   height: 8px;
@@ -147,83 +145,12 @@
   background: rgba(16, 163, 127, 0.25);
 }
 
-/* Active + Hover 叠加 */
 #gpt-timeline .tl-node.active:hover .tl-star {
   background: #12c694;
   box-shadow:
     0 0 8px rgba(18, 198, 148, 0.7),
     0 0 20px rgba(18, 198, 148, 0.3),
     0 0 36px rgba(18, 198, 148, 0.1);
-}
-
-/* ★ Tooltip 气泡 — 玻璃质感 */
-#gpt-timeline .tl-tooltip {
-  position: absolute;
-  right: 32px;
-  background: rgba(32, 33, 35, 0.92);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  color: #e0e0e6;
-  font-size: 13px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  line-height: 1.6;
-  padding: 12px 14px;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  white-space: pre-wrap;
-  word-break: break-word;
-  max-width: 340px;
-  min-width: 120px;
-  max-height: 200px;
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255,255,255,0.15) transparent;
-  opacity: 0;
-  transform: translateX(6px) scale(0.96);
-  pointer-events: none;
-  transition: opacity 0.25s ease, transform 0.25s ease;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
-}
-
-#gpt-timeline .tl-tooltip::-webkit-scrollbar {
-  width: 4px;
-}
-
-#gpt-timeline .tl-tooltip::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 2px;
-}
-
-/* tooltip 序号标题 */
-#gpt-timeline .tl-tooltip .tl-tooltip-num {
-  font-size: 11px;
-  font-weight: 600;
-  color: #10a37f;
-  margin-bottom: 4px;
-  display: block;
-}
-
-/* tooltip 问题正文 */
-#gpt-timeline .tl-tooltip .tl-tooltip-text {
-  display: block;
-  color: #e0e0e6;
-}
-
-/* 小三角箭头 */
-#gpt-timeline .tl-tooltip::after {
-  content: '';
-  position: absolute;
-  top: 20px;
-  right: -5px;
-  border: 5px solid transparent;
-  border-left-color: rgba(32, 33, 35, 0.92);
-  border-right-width: 0;
-}
-
-#gpt-timeline .tl-node:hover .tl-tooltip {
-  opacity: 1;
-  transform: translateX(0) scale(1);
-  pointer-events: auto;
 }
 
 /* ★ 序号小标签 */
@@ -242,6 +169,76 @@
 
 #gpt-timeline .tl-node:hover .tl-badge {
   opacity: 1;
+}
+
+/* ===== Tooltip — 挂在 body 上，不受容器裁切 ===== */
+#gpt-tl-tooltip {
+  position: fixed;
+  z-index: 10002;
+  background: rgba(32, 33, 35, 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: #e0e0e6;
+  font-size: 13px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  line-height: 1.6;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  white-space: pre-wrap;
+  word-break: break-word;
+  width: 320px;
+  max-height: 240px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.15) transparent;
+  opacity: 0;
+  transform: translateX(6px) scale(0.96);
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+}
+
+#gpt-tl-tooltip.visible {
+  opacity: 1;
+  transform: translateX(0) scale(1);
+  pointer-events: auto;
+}
+
+#gpt-tl-tooltip::-webkit-scrollbar {
+  width: 4px;
+}
+
+#gpt-tl-tooltip::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 2px;
+}
+
+/* 小三角箭头 */
+#gpt-tl-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 18px;
+  right: -5px;
+  border: 5px solid transparent;
+  border-left-color: rgba(32, 33, 35, 0.92);
+  border-right-width: 0;
+}
+
+/* 序号标题 */
+#gpt-tl-tooltip .tl-tooltip-num {
+  font-size: 11px;
+  font-weight: 600;
+  color: #10a37f;
+  margin-bottom: 6px;
+  display: block;
+  letter-spacing: 0.3px;
+}
+
+/* 问题正文 */
+#gpt-tl-tooltip .tl-tooltip-text {
+  display: block;
+  color: #e0e0e6;
 }
 
 /* ===== 折叠按钮 ===== */
@@ -263,7 +260,6 @@
   align-items: center;
   justify-content: center;
   transition: all 0.3s ease;
-  /* JS 会动态设置 right */
   right: calc(50% - 400px - 40px);
 }
 
@@ -273,7 +269,6 @@
   border-color: rgba(255, 255, 255, 0.15);
 }
 
-/* 隐藏时间线 */
 #gpt-timeline.hidden {
   display: none;
 }
@@ -284,7 +279,6 @@
   50%      { opacity: 1; }
 }
 
-/* 微弱闪烁 — 让星星有「活着」的感觉 */
 #gpt-timeline .tl-node:nth-child(3n) .tl-star {
   animation: starBreath 4s ease-in-out infinite;
 }
@@ -295,13 +289,12 @@
   animation: starBreath 6s ease-in-out infinite 1.6s;
 }
 
-/* 活跃节点不需要呼吸动画 */
 #gpt-timeline .tl-node.active .tl-star,
 #gpt-timeline .tl-node:hover .tl-star {
   animation: none;
 }
 
-/* ===== 浅色主题适配 ===== */
+/* ===== 浅色主题 ===== */
 @media (prefers-color-scheme: light) {
   #gpt-timeline .tl-track {
     background: linear-gradient(
@@ -316,49 +309,33 @@
 
   #gpt-timeline .tl-star {
     background: rgba(0, 0, 0, 0.15);
-    box-shadow:
-      0 0 3px rgba(0, 0, 0, 0.08),
-      0 0 6px rgba(0, 0, 0, 0.04);
+    box-shadow: 0 0 3px rgba(0, 0, 0, 0.08), 0 0 6px rgba(0, 0, 0, 0.04);
   }
 
   #gpt-timeline .tl-node:hover .tl-star {
     background: rgba(0, 0, 0, 0.65);
-    box-shadow:
-      0 0 6px rgba(0, 0, 0, 0.2),
-      0 0 16px rgba(100, 100, 180, 0.15);
+    box-shadow: 0 0 6px rgba(0, 0, 0, 0.2), 0 0 16px rgba(100, 100, 180, 0.15);
   }
 
-  #gpt-timeline .tl-node:hover .tl-star::before {
-    background: rgba(0, 0, 0, 0.15);
-  }
+  #gpt-timeline .tl-node:hover .tl-star::before { background: rgba(0, 0, 0, 0.15); }
+  #gpt-timeline .tl-node:hover .tl-star::after  { background: rgba(0, 0, 0, 0.15); }
 
-  #gpt-timeline .tl-node:hover .tl-star::after {
-    background: rgba(0, 0, 0, 0.15);
-  }
+  #gpt-timeline .tl-node.active .tl-star::before { background: rgba(16, 163, 127, 0.18); }
+  #gpt-timeline .tl-node.active .tl-star::after  { background: rgba(16, 163, 127, 0.18); }
 
-  #gpt-timeline .tl-tooltip {
+  #gpt-timeline .tl-badge { color: rgba(0, 0, 0, 0.45); }
+
+  #gpt-tl-tooltip {
     background: rgba(255, 255, 255, 0.94);
     border: 1px solid rgba(0, 0, 0, 0.08);
     color: #1a1a2e;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
     scrollbar-color: rgba(0,0,0,0.12) transparent;
   }
 
-  #gpt-timeline .tl-tooltip::-webkit-scrollbar-thumb {
-    background: rgba(0, 0, 0, 0.12);
-  }
-
-  #gpt-timeline .tl-tooltip .tl-tooltip-text {
-    color: #1a1a2e;
-  }
-
-  #gpt-timeline .tl-tooltip::after {
-    border-left-color: rgba(255, 255, 255, 0.94);
-  }
-
-  #gpt-timeline .tl-badge {
-    color: rgba(0, 0, 0, 0.45);
-  }
+  #gpt-tl-tooltip::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.12); }
+  #gpt-tl-tooltip .tl-tooltip-text { color: #1a1a2e; }
+  #gpt-tl-tooltip::after { border-left-color: rgba(255, 255, 255, 0.94); }
 
   #gpt-timeline-toggle {
     background: rgba(255, 255, 255, 0.6);
@@ -369,13 +346,5 @@
   #gpt-timeline-toggle:hover {
     background: rgba(255, 255, 255, 0.9);
     color: rgba(0, 0, 0, 0.6);
-  }
-
-  #gpt-timeline .tl-node.active .tl-star::before {
-    background: rgba(16, 163, 127, 0.18);
-  }
-
-  #gpt-timeline .tl-node.active .tl-star::after {
-    background: rgba(16, 163, 127, 0.18);
   }
 }
