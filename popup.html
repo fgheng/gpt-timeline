@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      width: 280px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #1e1e2e;
+      color: #e0e0e6;
+      padding: 16px;
+      font-size: 13px;
+    }
+    h1 {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .site-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .site-row:last-child { border-bottom: none; }
+    .site-name {
+      font-size: 13px;
+      color: #c0c0cc;
+    }
+    /* Toggle switch */
+    .switch {
+      position: relative;
+      width: 36px;
+      height: 20px;
+      flex-shrink: 0;
+    }
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: #3a3a4a;
+      border-radius: 10px;
+      transition: 0.25s;
+    }
+    .slider::before {
+      content: '';
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      left: 2px;
+      bottom: 2px;
+      background: #888;
+      border-radius: 50%;
+      transition: 0.25s;
+    }
+    input:checked + .slider {
+      background: #10a37f;
+    }
+    input:checked + .slider::before {
+      transform: translateX(16px);
+      background: white;
+    }
+  </style>
+</head>
+<body>
+  <h1>✦ GPT Timeline</h1>
+
+  <div class="site-row">
+    <span class="site-name">ChatGPT</span>
+    <label class="switch">
+      <input type="checkbox" data-site="chatgpt.com" checked>
+      <span class="slider"></span>
+    </label>
+  </div>
+
+  <div class="site-row">
+    <span class="site-name">DeepSeek</span>
+    <label class="switch">
+      <input type="checkbox" data-site="chat.deepseek.com">
+      <span class="slider"></span>
+    </label>
+  </div>
+
+  <div class="site-row">
+    <span class="site-name">通义千问 Qwen</span>
+    <label class="switch">
+      <input type="checkbox" data-site="chat.qwen.ai" checked>
+      <span class="slider"></span>
+    </label>
+  </div>
+
+  <div class="site-row">
+    <span class="site-name">豆包 Doubao</span>
+    <label class="switch">
+      <input type="checkbox" data-site="www.doubao.com" checked>
+      <span class="slider"></span>
+    </label>
+  </div>
+
+  <div class="site-row">
+    <span class="site-name">Kimi</span>
+    <label class="switch">
+      <input type="checkbox" data-site="www.kimi.com" checked>
+      <span class="slider"></span>
+    </label>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

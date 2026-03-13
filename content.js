@@ -11,6 +11,77 @@
   "use strict";
 
   /* ================================================================
+   *  站点开关 — 检查当前站点是否启用
+   * ================================================================ */
+
+  const SITE_DEFAULTS = {
+    "chatgpt.com": true,
+    "chat.deepseek.com": false,   // DeepSeek 自带时间线，默认关闭
+    "chat.qwen.ai": true,
+    "www.doubao.com": true,
+    "www.kimi.com": true,
+  };
+
+  let siteEnabled = SITE_DEFAULTS[location.hostname];
+  if (siteEnabled === undefined) siteEnabled = true; // 未知站点默认开启
+
+  // 从 storage 读取用户设置
+  if (chrome.storage && chrome.storage.sync) {
+    chrome.storage.sync.get("siteToggles", (result) => {
+      const toggles = result.siteToggles || {};
+      if (location.hostname in toggles) {
+        siteEnabled = toggles[location.hostname];
+      }
+      if (siteEnabled) {
+        init();
+      } else {
+        destroy();
+      }
+    });
+  } else {
+    // storage 不可用，用默认值
+    if (siteEnabled) init();
+  }
+
+  // 监听来自 popup 的实时开关消息
+  if (chrome.runtime && chrome.runtime.onMessage) {
+    chrome.runtime.onMessage.addListener((msg) => {
+      if (msg.type === "toggle" && msg.site === location.hostname) {
+        siteEnabled = msg.enabled;
+        if (siteEnabled) {
+          init();
+        } else {
+          destroy();
+        }
+      }
+    });
+  }
+
+  /* ================================================================
+   *  销毁/重建
+   * ================================================================ */
+
+  let intervalId = null;
+  let routeIntervalId = null;
+  let initialized = false;
+
+  function destroy() {
+    const tl = document.getElementById("gpt-timeline");
+    if (tl) tl.remove();
+    const btn = document.getElementById("gpt-timeline-toggle");
+    if (btn) btn.remove();
+    const tip = document.getElementById("gpt-tl-tooltip");
+    if (tip) tip.remove();
+    timeline = null;
+    toggleBtn = null;
+    nodesWrap = null;
+    tooltip = null;
+    if (intervalId) { clearInterval(intervalId); intervalId = null; }
+    if (routeIntervalId) { clearInterval(routeIntervalId); routeIntervalId = null; }
+    initialized = false;
+  }
+
+  /* ================================================================
    *  平台适配器 — 经过实际 DOM 结构验证
    * ================================================================ */
 
@@ -546,27 +617,26 @@
       }
     };
     window.addEventListener("popstate", check);
-    setInterval(check, 1000);
+    routeIntervalId = setInterval(check, 1000);
   }
 
   /* ---------- 入口 ---------- */
 
   function init() {
+    if (initialized) return;
+    initialized = true;
+
     currentAdapter = detectAdapter();
     createTooltip();
     createTimeline();
     setupTooltipHover();
     tick();
-    setInterval(tick, SCAN_INTERVAL);
+    intervalId = setInterval(tick, SCAN_INTERVAL);
     setupScrollListener();
     setupResizeListener();
     setupObserver();
     setupRouteListener();
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", init);
-  } else {
-    init();
-  }
+  // 不在这里直接 init()，由上方的 storage 回调决定是否启动
 })();
