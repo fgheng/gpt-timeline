@@ -193,7 +193,7 @@
   scrollbar-width: thin;
   scrollbar-color: rgba(255,255,255,0.15) transparent;
   opacity: 0;
-  transform: translateX(6px) scale(0.96);
+  transform: translateX(-6px) scale(0.96);
   pointer-events: none;
   transition: opacity 0.2s ease, transform 0.2s ease;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
@@ -214,15 +214,33 @@
   border-radius: 2px;
 }
 
-/* 小三角箭头 */
+/* 小三角箭头 — 默认指向左侧（tooltip 在星星右边） */
 #gpt-tl-tooltip::after {
   content: '';
   position: absolute;
   top: 18px;
-  right: -5px;
   border: 5px solid transparent;
+  transition: none;
+}
+
+/* 箭头朝左（tooltip 在右侧） */
+#gpt-tl-tooltip.arrow-left::after {
+  left: -5px;
+  right: auto;
+  border-right-color: rgba(32, 33, 35, 0.92);
+  border-left-color: transparent;
+  border-left-width: 0;
+  border-right-width: 5px;
+}
+
+/* 箭头朝右（tooltip 在左侧，fallback） */
+#gpt-tl-tooltip.arrow-right::after {
+  right: -5px;
+  left: auto;
   border-left-color: rgba(32, 33, 35, 0.92);
+  border-right-color: transparent;
   border-right-width: 0;
+  border-left-width: 5px;
 }
 
 /* 序号标题 */
@@ -335,7 +353,8 @@
 
   #gpt-tl-tooltip::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.12); }
   #gpt-tl-tooltip .tl-tooltip-text { color: #1a1a2e; }
-  #gpt-tl-tooltip::after { border-left-color: rgba(255, 255, 255, 0.94); }
+  #gpt-tl-tooltip.arrow-left::after { border-right-color: rgba(255, 255, 255, 0.94); border-left-color: transparent; }
+  #gpt-tl-tooltip.arrow-right::after { border-left-color: rgba(255, 255, 255, 0.94); border-right-color: transparent; }
 
   #gpt-timeline-toggle {
     background: rgba(255, 255, 255, 0.6);

@@ -60,9 +60,26 @@
     const tipRect  = tooltip.getBoundingClientRect();
     const nodeRect = nodeEl.getBoundingClientRect();
 
-    // 定位：tooltip 右侧对齐星星左侧，垂直居中
-    let top  = nodeRect.top + nodeRect.height / 2 - 22; // 箭头大约在 18px 处
-    let left = nodeRect.left - tipRect.width - 10;
+    // 定位：tooltip 放在星星右侧，利用右边空白区域
+    let top  = nodeRect.top + nodeRect.height / 2 - 22;
+    let left = nodeRect.right + 10;
+
+    // 计算右侧可用空间
+    const rightSpace = window.innerWidth - nodeRect.right - 10;
+    // 动态调整 tooltip 宽度以适应右侧空间
+    const tooltipWidth = Math.min(320, Math.max(160, rightSpace - 16));
+    tooltip.style.width = tooltipWidth + "px";
+
+    // 如果右侧空间实在太小（< 100px），才回退到左侧
+    if (rightSpace < 100) {
+      left = nodeRect.left - tipRect.width - 10;
+      tooltip.style.width = "320px";
+      tooltip.classList.add("arrow-right");
+      tooltip.classList.remove("arrow-left");
+    } else {
+      tooltip.classList.add("arrow-left");
+      tooltip.classList.remove("arrow-right");
+    }
 
     // 防止超出屏幕顶部/底部
     const margin = 8;
@@ -71,6 +88,10 @@
       top = window.innerHeight - margin - tipRect.height;
     }
 
+    // 防止超出右侧
+    if (left + tooltipWidth > window.innerWidth - margin) {
+      left = window.innerWidth - margin - tooltipWidth;
+    }
     // 防止超出左侧
     if (left < margin) left = margin;
 
