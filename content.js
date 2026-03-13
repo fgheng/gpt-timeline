@@ -236,6 +236,34 @@
   let hoverTimer  = null;
   let cachedRight = 0;   // 缓存的对话区域右边界
 
+  /* ---------- 主题检测 ---------- */
+
+  function detectLightTheme() {
+    // 检查实际背景色亮度
+    const testEls = [document.body, document.querySelector('main'), document.documentElement];
+    for (const el of testEls) {
+      if (!el) continue;
+      const bg = window.getComputedStyle(el).backgroundColor;
+      const match = bg.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+      if (match) {
+        const [, r, g, b] = match.map(Number);
+        const luminance = (0.299 * r + 0.587 * g + 0.114 * b);
+        if (luminance > 160) return true;   // 亮色背景
+        if (luminance < 80)  return false;  // 暗色背景
+      }
+    }
+    // 兜底：检查 prefers-color-scheme
+    return window.matchMedia('(prefers-color-scheme: light)').matches;
+  }
+
+  function applyThemeClass() {
+    const isLight = detectLightTheme();
+    const tl = document.getElementById("gpt-timeline");
+    const tip = document.getElementById("gpt-tl-tooltip");
+    if (tl) tl.classList.toggle("tl-light", isLight);
+    if (tip) tip.classList.toggle("tl-light", isLight);
+  }
+
   /* ---------- 全局 Tooltip ---------- */
 
   function createTooltip() {
@@ -500,7 +528,7 @@
       });
 
       node.addEventListener("click", () => {
-        el.scrollIntoView({ behavior: SCROLL_BEHAVIOR, block: "center" });
+        scrollToElement(el);
         setActive(idx);
       });
 
@@ -513,6 +541,37 @@
     if (!nodesWrap) return;
     const nodes = nodesWrap.querySelectorAll(".tl-node");
     nodes.forEach((n, i) => n.classList.toggle("active", i === idx));
+  }
+
+  /* ---------- 滚动到元素 ---------- */
+
+  function findScrollContainer(el) {
+    // 从元素向上找到真正的滚动容器
+    let parent = el.parentElement;
+    while (parent && parent !== document.body) {
+      const style = window.getComputedStyle(parent);
+      const overflowY = style.overflowY;
+      if ((overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay')
+          && parent.scrollHeight > parent.clientHeight) {
+        return parent;
+      }
+      parent = parent.parentElement;
+    }
+    return null; // 使用默认 scrollIntoView
+  }
+
+  function scrollToElement(el) {
+    const container = findScrollContainer(el);
+    if (container) {
+      // 手动计算滚动位置，使元素居中
+      const containerRect = container.getBoundingClientRect();
+      const elRect = el.getBoundingClientRect();
+      const offset = elRect.top - containerRect.top + container.scrollTop;
+      const center = offset - container.clientHeight / 2 + elRect.height / 2;
+      container.scrollTo({ top: center, behavior: SCROLL_BEHAVIOR });
+    } else {
+      el.scrollIntoView({ behavior: SCROLL_BEHAVIOR, block: "center" });
+    }
   }
 
   /* ---------- 滚动跟踪 ---------- */
@@ -560,6 +619,7 @@
     if (hash !== lastHash) {
       lastHash = hash;
       render(msgs);
+      applyThemeClass(); // 消息变化时重新检测主题
     }
 
     if (msgs.length > 0) {
@@ -629,6 +689,7 @@
     currentAdapter = detectAdapter();
     createTooltip();
     createTimeline();
+    applyThemeClass();
     setupTooltipHover();
     tick();
     intervalId = setInterval(tick, SCAN_INTERVAL);

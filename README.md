@@ -34,7 +34,7 @@ When you're deep in a long ChatGPT conversation, it's hard to scroll back and fi
 1. Download or clone this repository:
 
    ```bash
-   git clone https://github.com/your-username/gpt-timeline.git
+   git clone https://github.com/fgheng/gpt-timeline.git
    ```
 
 2. Open Chrome and navigate to:
