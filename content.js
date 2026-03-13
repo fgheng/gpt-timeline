@@ -10,7 +10,7 @@
 
   /* ---------- 常量 ---------- */
   const SCAN_INTERVAL   = 1500;
-  const PREVIEW_LEN     = 36;
+  const PREVIEW_LEN     = 200;  // tooltip 最多显示的字符数
   const SCROLL_BEHAVIOR = "smooth";
 
   /* ---------- 状态 ---------- */
@@ -150,10 +150,20 @@
       const star = document.createElement("div");
       star.className = "tl-star";
 
-      // Tooltip
+      // Tooltip — 显示完整问题
       const tip = document.createElement("span");
       tip.className = "tl-tooltip";
-      tip.textContent = `${idx + 1}. ${extractPreview(el)}`;
+
+      const tipNum = document.createElement("span");
+      tipNum.className = "tl-tooltip-num";
+      tipNum.textContent = `Question #${idx + 1}`;
+
+      const tipText = document.createElement("span");
+      tipText.className = "tl-tooltip-text";
+      tipText.textContent = extractPreview(el);
+
+      tip.appendChild(tipNum);
+      tip.appendChild(tipText);
 
       // 序号
       const badge = document.createElement("span");

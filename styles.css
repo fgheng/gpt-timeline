@@ -160,42 +160,70 @@
 #gpt-timeline .tl-tooltip {
   position: absolute;
   right: 32px;
-  background: rgba(32, 33, 35, 0.88);
+  background: rgba(32, 33, 35, 0.92);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   color: #e0e0e6;
-  font-size: 12px;
+  font-size: 13px;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  line-height: 1.5;
-  padding: 8px 12px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  white-space: nowrap;
-  max-width: 240px;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.6;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-width: 340px;
+  min-width: 120px;
+  max-height: 200px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.15) transparent;
   opacity: 0;
-  transform: translateX(6px);
+  transform: translateX(6px) scale(0.96);
   pointer-events: none;
   transition: opacity 0.25s ease, transform 0.25s ease;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+}
+
+#gpt-timeline .tl-tooltip::-webkit-scrollbar {
+  width: 4px;
+}
+
+#gpt-timeline .tl-tooltip::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 2px;
+}
+
+/* tooltip 序号标题 */
+#gpt-timeline .tl-tooltip .tl-tooltip-num {
+  font-size: 11px;
+  font-weight: 600;
+  color: #10a37f;
+  margin-bottom: 4px;
+  display: block;
+}
+
+/* tooltip 问题正文 */
+#gpt-timeline .tl-tooltip .tl-tooltip-text {
+  display: block;
+  color: #e0e0e6;
 }
 
 /* 小三角箭头 */
 #gpt-timeline .tl-tooltip::after {
   content: '';
   position: absolute;
-  top: 50%;
+  top: 20px;
   right: -5px;
-  transform: translateY(-50%);
   border: 5px solid transparent;
-  border-left-color: rgba(32, 33, 35, 0.88);
+  border-left-color: rgba(32, 33, 35, 0.92);
   border-right-width: 0;
 }
 
 #gpt-timeline .tl-node:hover .tl-tooltip {
   opacity: 1;
-  transform: translateX(0);
+  transform: translateX(0) scale(1);
+  pointer-events: auto;
 }
 
 /* ★ 序号小标签 */
@@ -309,14 +337,23 @@
   }
 
   #gpt-timeline .tl-tooltip {
-    background: rgba(255, 255, 255, 0.92);
+    background: rgba(255, 255, 255, 0.94);
     border: 1px solid rgba(0, 0, 0, 0.08);
     color: #1a1a2e;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+    scrollbar-color: rgba(0,0,0,0.12) transparent;
+  }
+
+  #gpt-timeline .tl-tooltip::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.12);
+  }
+
+  #gpt-timeline .tl-tooltip .tl-tooltip-text {
+    color: #1a1a2e;
   }
 
   #gpt-timeline .tl-tooltip::after {
-    border-left-color: rgba(255, 255, 255, 0.92);
+    border-left-color: rgba(255, 255, 255, 0.94);
   }
 
   #gpt-timeline .tl-badge {
