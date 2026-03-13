@@ -1,135 +1,197 @@
 /**
- * GPT Timeline — content script
+ * GPT Timeline — 星光时间线
  *
- * 在 ChatGPT 页面右侧渲染一条「问题时间线」。
- * 每个用户提问对应一个小圆圈，悬停显示问题摘要，点击平滑滚动到该问题。
+ * 在 ChatGPT 对话区域右侧渲染一条优雅的时间线。
+ * 每个用户提问对应一个星星圆点，悬停显示问题摘要 + 星芒动效，点击平滑滚动。
  */
 
 (() => {
   "use strict";
 
   /* ---------- 常量 ---------- */
-  const SCAN_INTERVAL = 1500;            // 扫描间隔 ms
-  const PREVIEW_LEN   = 40;             // tooltip 显示的最大字符数
+  const SCAN_INTERVAL   = 1500;
+  const PREVIEW_LEN     = 36;
   const SCROLL_BEHAVIOR = "smooth";
 
-  /* ---------- DOM 容器 ---------- */
-  let timeline = null;
-  let toggleBtn = null;
-  let visible = true;
+  /* ---------- 状态 ---------- */
+  let timeline    = null;
+  let toggleBtn   = null;
+  let nodesWrap   = null;
+  let visible     = true;
+  let activeIndex = -1;
+  let lastCount   = 0;
+  let scrollContainer = null;
 
-  /** 创建时间线容器和开关按钮 */
+  /* ---------- DOM 创建 ---------- */
+
   function createTimeline() {
     if (document.getElementById("gpt-timeline")) return;
 
     timeline = document.createElement("div");
     timeline.id = "gpt-timeline";
-    // 竖线
-    const line = document.createElement("div");
-    line.className = "tl-line";
-    timeline.appendChild(line);
+
+    const track = document.createElement("div");
+    track.className = "tl-track";
+    timeline.appendChild(track);
+
+    nodesWrap = document.createElement("div");
+    nodesWrap.className = "tl-nodes";
+    timeline.appendChild(nodesWrap);
+
     document.body.appendChild(timeline);
 
-    // 折叠开关
+    // 折叠按钮
     toggleBtn = document.createElement("button");
     toggleBtn.id = "gpt-timeline-toggle";
     toggleBtn.title = "Toggle Timeline";
-    toggleBtn.textContent = "◷";
+    toggleBtn.innerHTML = "✦";
     toggleBtn.addEventListener("click", () => {
       visible = !visible;
       timeline.classList.toggle("hidden", !visible);
-      toggleBtn.textContent = visible ? "◷" : "◴";
+      toggleBtn.innerHTML = visible ? "✦" : "✧";
     });
     document.body.appendChild(toggleBtn);
+
+    // 初始定位
+    updatePosition();
   }
 
-  /* ---------- 扫描用户提问 ---------- */
+  /* ---------- 动态定位：紧贴对话框右侧 ---------- */
 
-  /**
-   * 获取所有用户消息元素。
-   * ChatGPT 的 DOM 结构可能变化，这里用多种选择器兜底。
-   */
+  function updatePosition() {
+    if (!timeline) return;
+
+    // 尝试找到 ChatGPT 的对话容器
+    const chatArea =
+      document.querySelector('main .xl\\:max-w-\\[48rem\\]') ||
+      document.querySelector('main [class*="max-w-"]') ||
+      document.querySelector('main .flex.flex-col.items-center') ||
+      document.querySelector('main article')?.parentElement?.parentElement;
+
+    if (chatArea) {
+      const rect = chatArea.getBoundingClientRect();
+      const rightEdge = rect.right;
+      timeline.style.right = "auto";
+      timeline.style.left = (rightEdge + 8) + "px";
+      toggleBtn.style.right = "auto";
+      toggleBtn.style.left = (rightEdge + 12) + "px";
+    } else {
+      // fallback：基于视口宽度估算
+      timeline.style.left = "auto";
+      timeline.style.right = Math.max(12, (window.innerWidth - 820) / 2 - 44) + "px";
+      toggleBtn.style.left = "auto";
+      toggleBtn.style.right = timeline.style.right;
+    }
+  }
+
+  /* ---------- 查找滚动容器 ---------- */
+
+  function findScrollContainer() {
+    if (scrollContainer && document.contains(scrollContainer)) return scrollContainer;
+
+    // ChatGPT 的主滚动区域
+    const candidates = [
+      document.querySelector('main div[class*="overflow-y"]'),
+      document.querySelector('main .flex-1.overflow-hidden > div'),
+      document.querySelector('[role="presentation"]'),
+      document.querySelector('main'),
+    ];
+
+    for (const el of candidates) {
+      if (el && el.scrollHeight > el.clientHeight) {
+        scrollContainer = el;
+        return el;
+      }
+    }
+
+    return document.documentElement;
+  }
+
+  /* ---------- 扫描用户消息 ---------- */
+
   function getUserMessages() {
-    // ChatGPT 当前 (2024+) 使用 data-message-author-role
     let msgs = Array.from(
       document.querySelectorAll('[data-message-author-role="user"]')
     );
 
-    // 兜底：如果上面选不到，尝试旧版选择器
     if (msgs.length === 0) {
-      msgs = Array.from(
-        document.querySelectorAll(
-          'div.agent-turn[data-scroll-anchor] .whitespace-pre-wrap,' +
-          'div[data-testid^="conversation-turn-"] div.whitespace-pre-wrap'
-        )
-      );
-      // 只取偶数索引（用户消息）
-      msgs = msgs.filter((_, i) => i % 2 === 0);
+      // 兜底选择器
+      const turns = document.querySelectorAll('[data-testid^="conversation-turn-"]');
+      turns.forEach((turn, i) => {
+        if (i % 2 === 0) {
+          const text = turn.querySelector('.whitespace-pre-wrap');
+          if (text) msgs.push(text);
+        }
+      });
     }
 
     return msgs;
   }
 
-  /** 从消息元素中提取纯文本摘要 */
   function extractPreview(el) {
-    const text = (el.innerText || el.textContent || "").trim();
+    const text = (el.innerText || el.textContent || "").trim().replace(/\n+/g, " ");
     if (text.length <= PREVIEW_LEN) return text;
     return text.slice(0, PREVIEW_LEN) + "…";
   }
 
   /* ---------- 渲染 ---------- */
 
-  /** 当前高亮索引 */
-  let activeIndex = -1;
-
-  /** 根据扫描结果更新时间线 */
   function render(messages) {
-    if (!timeline) return;
+    if (!nodesWrap) return;
 
-    // 清空旧节点（保留竖线）
-    const oldNodes = timeline.querySelectorAll(".tl-node");
-    oldNodes.forEach((n) => n.remove());
+    nodesWrap.innerHTML = "";
 
     messages.forEach((el, idx) => {
       const node = document.createElement("div");
       node.className = "tl-node";
       if (idx === activeIndex) node.classList.add("active");
 
-      // 圆圈
-      const dot = document.createElement("div");
-      dot.className = "tl-dot";
+      // 星星
+      const star = document.createElement("div");
+      star.className = "tl-star";
 
       // Tooltip
       const tip = document.createElement("span");
       tip.className = "tl-tooltip";
-      tip.textContent = `#${idx + 1}  ${extractPreview(el)}`;
+      tip.textContent = `${idx + 1}. ${extractPreview(el)}`;
 
-      node.appendChild(dot);
+      // 序号
+      const badge = document.createElement("span");
+      badge.className = "tl-badge";
+      badge.textContent = idx + 1;
+
+      node.appendChild(star);
       node.appendChild(tip);
+      node.appendChild(badge);
 
-      // 点击跳转
       node.addEventListener("click", () => {
         el.scrollIntoView({ behavior: SCROLL_BEHAVIOR, block: "center" });
         setActive(idx);
       });
 
-      timeline.appendChild(node);
+      // 涟漪效果
+      node.addEventListener("mouseenter", () => {
+        star.style.transition = "all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)";
+      });
+
+      nodesWrap.appendChild(node);
     });
   }
 
   function setActive(idx) {
     activeIndex = idx;
-    const nodes = timeline.querySelectorAll(".tl-node");
+    if (!nodesWrap) return;
+    const nodes = nodesWrap.querySelectorAll(".tl-node");
     nodes.forEach((n, i) => n.classList.toggle("active", i === idx));
   }
 
-  /* ---------- 视口高亮跟踪 ---------- */
+  /* ---------- 滚动跟踪 ---------- */
 
   function updateActiveByScroll(messages) {
-    // 找到距离视口中心最近的用户消息
     const viewMid = window.innerHeight / 2;
     let closest = -1;
     let closestDist = Infinity;
+
     messages.forEach((el, idx) => {
       const rect = el.getBoundingClientRect();
       const dist = Math.abs(rect.top + rect.height / 2 - viewMid);
@@ -138,6 +200,7 @@
         closest = idx;
       }
     });
+
     if (closest !== -1 && closest !== activeIndex) {
       setActive(closest);
     }
@@ -145,21 +208,61 @@
 
   /* ---------- 主循环 ---------- */
 
-  let lastCount = 0;
-
   function tick() {
     const msgs = getUserMessages();
 
-    // 数量变化时重新渲染
     if (msgs.length !== lastCount) {
       lastCount = msgs.length;
       render(msgs);
     }
 
-    // 更新高亮
     if (msgs.length > 0) {
       updateActiveByScroll(msgs);
     }
+
+    updatePosition();
+  }
+
+  /* ---------- 滚动监听 ---------- */
+
+  function setupScrollListener() {
+    let timer = null;
+    const handler = () => {
+      if (timer) return;
+      timer = setTimeout(() => {
+        timer = null;
+        const msgs = getUserMessages();
+        if (msgs.length) updateActiveByScroll(msgs);
+      }, 100);
+    };
+
+    // 监听 window
+    window.addEventListener("scroll", handler, true);
+
+    // 同时监听内部容器
+    const container = findScrollContainer();
+    if (container && container !== document.documentElement) {
+      container.addEventListener("scroll", handler, { passive: true });
+    }
+  }
+
+  /* ---------- resize 响应 ---------- */
+
+  function setupResizeListener() {
+    let timer = null;
+    window.addEventListener("resize", () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(updatePosition, 150);
+    });
+  }
+
+  /* ---------- MutationObserver ---------- */
+
+  function setupObserver() {
+    const observer = new MutationObserver(() => {
+      setTimeout(tick, 300);
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
   }
 
   /* ---------- 入口 ---------- */
@@ -168,31 +271,11 @@
     createTimeline();
     tick();
     setInterval(tick, SCAN_INTERVAL);
-
-    // 滚动时也更新高亮（节流）
-    let scrollTimer = null;
-    window.addEventListener(
-      "scroll",
-      () => {
-        if (scrollTimer) return;
-        scrollTimer = setTimeout(() => {
-          scrollTimer = null;
-          const msgs = getUserMessages();
-          if (msgs.length) updateActiveByScroll(msgs);
-        }, 120);
-      },
-      true   // capture，因为 ChatGPT 内部有自己的滚动容器
-    );
-
-    // 监听 ChatGPT 内部滚动容器
-    const observer = new MutationObserver(() => {
-      // 当 DOM 变化时也 tick 一次（如切换对话）
-      setTimeout(tick, 300);
-    });
-    observer.observe(document.body, { childList: true, subtree: true });
+    setupScrollListener();
+    setupResizeListener();
+    setupObserver();
   }
 
-  // 确保 DOM ready
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", init);
   } else {
