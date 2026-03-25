@@ -239,20 +239,38 @@
   /* ---------- 主题检测 ---------- */
 
   function detectLightTheme() {
-    // 检查实际背景色亮度
-    const testEls = [document.body, document.querySelector('main'), document.documentElement];
+    // 扩大检测范围：更多元素 + 跳过透明色
+    const extraSelectors = ['#app', '#root', '.app', '[class*="layout"]', '[class*="container"]',
+      '[class*="chat"]', '[class*="main"]', '[class*="page"]'];
+    const extraEls = extraSelectors.map(s => document.querySelector(s)).filter(Boolean);
+    const testEls = [document.body, document.documentElement, ...extraEls,
+      document.querySelector('main')].filter(Boolean);
+
     for (const el of testEls) {
-      if (!el) continue;
       const bg = window.getComputedStyle(el).backgroundColor;
-      const match = bg.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
-      if (match) {
-        const [, r, g, b] = match.map(Number);
-        const luminance = (0.299 * r + 0.587 * g + 0.114 * b);
-        if (luminance > 160) return true;   // 亮色背景
-        if (luminance < 80)  return false;  // 暗色背景
-      }
+      const match = bg.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\s*\)/);
+      if (!match) continue;
+      const [, r, g, b, a] = match.map(Number);
+      // 跳过透明或半透明（alpha < 0.5）
+      const alpha = match[4] !== undefined ? Number(match[4]) : 1;
+      if (alpha < 0.5) continue;
+      const luminance = (0.299 * r + 0.587 * g + 0.114 * b);
+      if (luminance > 160) return true;   // 亮色背景
+      if (luminance < 80)  return false;  // 暗色背景
     }
-    // 兜底：检查 prefers-color-scheme
+
+    // 兜底：检测页面文字颜色（亮色主题文字通常偏深）
+    const bodyColor = window.getComputedStyle(document.body).color;
+    const colorMatch = bodyColor.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+    if (colorMatch) {
+      const [, r, g, b] = colorMatch.map(Number);
+      const luminance = (0.299 * r + 0.587 * g + 0.114 * b);
+      // 文字颜色深 → 亮色主题；文字颜色浅 → 暗色主题
+      if (luminance < 80) return true;
+      if (luminance > 160) return false;
+    }
+
+    // 最终兜底：prefers-color-scheme
     return window.matchMedia('(prefers-color-scheme: light)').matches;
   }
 

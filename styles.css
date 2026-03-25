@@ -327,10 +327,10 @@
   );
 }
 
-/* 非激活星星：灰蓝色，白底清晰可见 */
+/* 非激活星星：浅灰蓝色，白底可见但不过重 */
 #gpt-timeline.tl-light .tl-star {
-  background: #8b95a8;
-  box-shadow: 0 0 4px rgba(100, 116, 139, 0.4), 0 0 8px rgba(100, 116, 139, 0.2);
+  background: #b8c0cc;
+  box-shadow: 0 0 4px rgba(100, 116, 139, 0.2), 0 0 8px rgba(100, 116, 139, 0.1);
 }
 
 /* hover 态：深蓝灰 */
