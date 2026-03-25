@@ -328,8 +328,8 @@
 }
 
 #gpt-timeline.tl-light .tl-star {
-  background: rgba(0, 0, 0, 0.22);
-  box-shadow: 0 0 3px rgba(0, 0, 0, 0.1), 0 0 6px rgba(0, 0, 0, 0.06);
+  background: rgba(0, 0, 0, 0.45);
+  box-shadow: 0 0 3px rgba(0, 0, 0, 0.2), 0 0 6px rgba(0, 0, 0, 0.1);
 }
 
 #gpt-timeline.tl-light .tl-node:hover .tl-star {
