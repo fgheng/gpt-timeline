@@ -563,17 +563,30 @@
 
   /* ---------- 滚动到元素 ---------- */
 
+  // 已知各平台的滚动容器选择器（兜底用）
+  const KNOWN_SCROLL_CONTAINERS = [
+    '.chat-detail-main',          // Kimi
+    '.chat-wrapper',              // Kimi 旧版
+    '[class*="chat-content"]',    // 通用
+  ];
+
   function findScrollContainer(el) {
-    // 从元素向上找到真正的滚动容器
+    // 优先：从元素向上找到真正的滚动容器（放宽为 >= 允许等高时也匹配）
     let parent = el.parentElement;
     while (parent && parent !== document.body) {
       const style = window.getComputedStyle(parent);
       const overflowY = style.overflowY;
       if ((overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay')
-          && parent.scrollHeight > parent.clientHeight) {
+          && parent.scrollHeight >= parent.clientHeight
+          && parent.clientHeight > 100) { // 排除高度极小的元素
         return parent;
       }
       parent = parent.parentElement;
+    }
+    // 兜底：尝试已知平台选择器
+    for (const sel of KNOWN_SCROLL_CONTAINERS) {
+      const found = document.querySelector(sel);
+      if (found) return found;
     }
     return null; // 使用默认 scrollIntoView
   }
