@@ -163,9 +163,10 @@
     kimi: {
       match: () => location.hostname === "www.kimi.com",
       getUserMessages() {
-        let msgs = Array.from(document.querySelectorAll('.segment-user'));
+        // 优先用 .chat-content-item-user（整行容器），高度更准确，滚动定位更精确
+        let msgs = Array.from(document.querySelectorAll('.chat-content-item-user'));
         if (msgs.length > 0) return msgs;
-        return Array.from(document.querySelectorAll('.chat-content-item-user'));
+        return Array.from(document.querySelectorAll('.segment-user'));
       },
     },
   };
@@ -571,22 +572,21 @@
   ];
 
   function findScrollContainer(el) {
-    // 优先：从元素向上找到真正的滚动容器（放宽为 >= 允许等高时也匹配）
+    // 从元素向上找到真正的可滚动容器（scrollHeight > clientHeight 才真正可滚动）
     let parent = el.parentElement;
     while (parent && parent !== document.body) {
       const style = window.getComputedStyle(parent);
       const overflowY = style.overflowY;
       if ((overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay')
-          && parent.scrollHeight >= parent.clientHeight
-          && parent.clientHeight > 100) { // 排除高度极小的元素
+          && parent.scrollHeight > parent.clientHeight) {
         return parent;
       }
       parent = parent.parentElement;
     }
-    // 兜底：尝试已知平台选择器
+    // 兜底：尝试已知平台选择器（内容超出时才有效）
     for (const sel of KNOWN_SCROLL_CONTAINERS) {
       const found = document.querySelector(sel);
-      if (found) return found;
+      if (found && found.scrollHeight > found.clientHeight) return found;
     }
     return null; // 使用默认 scrollIntoView
   }
@@ -594,12 +594,12 @@
   function scrollToElement(el) {
     const container = findScrollContainer(el);
     if (container) {
-      // 手动计算滚动位置，使元素居中
+      // getBoundingClientRect 给出相对于视口的位置，加上 scrollTop 转为容器内绝对偏移
       const containerRect = container.getBoundingClientRect();
       const elRect = el.getBoundingClientRect();
       const offset = elRect.top - containerRect.top + container.scrollTop;
       const center = offset - container.clientHeight / 2 + elRect.height / 2;
-      container.scrollTo({ top: center, behavior: SCROLL_BEHAVIOR });
+      container.scrollTo({ top: Math.max(0, center), behavior: SCROLL_BEHAVIOR });
     } else {
       el.scrollIntoView({ behavior: SCROLL_BEHAVIOR, block: "center" });
     }
