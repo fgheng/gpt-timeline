@@ -320,30 +320,32 @@
   background: linear-gradient(
     to bottom,
     transparent 0%,
-    rgba(0, 0, 0, 0.08) 8%,
-    rgba(0, 0, 0, 0.12) 50%,
-    rgba(0, 0, 0, 0.08) 92%,
+    rgba(100, 116, 139, 0.25) 8%,
+    rgba(100, 116, 139, 0.35) 50%,
+    rgba(100, 116, 139, 0.25) 92%,
     transparent 100%
   );
 }
 
+/* 非激活星星：灰蓝色，白底清晰可见 */
 #gpt-timeline.tl-light .tl-star {
-  background: rgba(0, 0, 0, 0.45);
-  box-shadow: 0 0 3px rgba(0, 0, 0, 0.2), 0 0 6px rgba(0, 0, 0, 0.1);
+  background: #8b95a8;
+  box-shadow: 0 0 4px rgba(100, 116, 139, 0.4), 0 0 8px rgba(100, 116, 139, 0.2);
 }
 
+/* hover 态：深蓝灰 */
 #gpt-timeline.tl-light .tl-node:hover .tl-star {
-  background: rgba(0, 0, 0, 0.7);
-  box-shadow: 0 0 6px rgba(0, 0, 0, 0.25), 0 0 16px rgba(100, 100, 180, 0.2);
+  background: #3d5a80;
+  box-shadow: 0 0 6px rgba(61, 90, 128, 0.5), 0 0 16px rgba(61, 90, 128, 0.25);
 }
 
-#gpt-timeline.tl-light .tl-node:hover .tl-star::before { background: rgba(0, 0, 0, 0.2); }
-#gpt-timeline.tl-light .tl-node:hover .tl-star::after  { background: rgba(0, 0, 0, 0.2); }
+#gpt-timeline.tl-light .tl-node:hover .tl-star::before { background: rgba(61, 90, 128, 0.3); }
+#gpt-timeline.tl-light .tl-node:hover .tl-star::after  { background: rgba(61, 90, 128, 0.3); }
 
-#gpt-timeline.tl-light .tl-node.active .tl-star::before { background: rgba(16, 163, 127, 0.22); }
-#gpt-timeline.tl-light .tl-node.active .tl-star::after  { background: rgba(16, 163, 127, 0.22); }
+#gpt-timeline.tl-light .tl-node.active .tl-star::before { background: rgba(16, 163, 127, 0.3); }
+#gpt-timeline.tl-light .tl-node.active .tl-star::after  { background: rgba(16, 163, 127, 0.3); }
 
-#gpt-timeline.tl-light .tl-badge { color: rgba(0, 0, 0, 0.5); }
+#gpt-timeline.tl-light .tl-badge { color: #64748b; }
 
 #gpt-tl-tooltip.tl-light {
   background: rgba(255, 255, 255, 0.95);
