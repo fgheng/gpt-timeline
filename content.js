@@ -344,6 +344,7 @@
 
     timeline = document.createElement("div");
     timeline.id = "gpt-timeline";
+    timeline.style.display = "none"; // 初始隐藏，等有消息时再显示
 
     const track = document.createElement("div");
     track.className = "tl-track";
@@ -359,6 +360,7 @@
     toggleBtn.id = "gpt-timeline-toggle";
     toggleBtn.title = "Toggle Timeline";
     toggleBtn.innerHTML = "✦";
+    toggleBtn.style.display = "none"; // 初始隐藏
     toggleBtn.addEventListener("click", () => {
       visible = !visible;
       timeline.classList.toggle("hidden", !visible);
@@ -366,8 +368,6 @@
       if (!visible) hideTooltip();
     });
     document.body.appendChild(toggleBtn);
-
-    updatePosition();
   }
 
   /* ---------- 智能定位：基于消息元素实际位置 ---------- */
@@ -612,6 +612,17 @@
   function tick() {
     const msgs = getUserMessages();
 
+    // 没有消息时隐藏 timeline 和 toggleBtn，避免初始化时显示空的时间线
+    if (msgs.length === 0) {
+      if (timeline) timeline.style.display = "none";
+      if (toggleBtn) toggleBtn.style.display = "none";
+      return;
+    }
+
+    // 有消息时确保可见
+    if (timeline) timeline.style.display = "";
+    if (toggleBtn) toggleBtn.style.display = "";
+
     const hash = msgs.length + "|" +
       (msgs[0]?.textContent?.slice(0, 20) || "") + "|" +
       (msgs[msgs.length - 1]?.textContent?.slice(0, 20) || "");
@@ -622,10 +633,7 @@
       applyThemeClass(); // 消息变化时重新检测主题
     }
 
-    if (msgs.length > 0) {
-      updateActiveByScroll(msgs);
-    }
-
+    updateActiveByScroll(msgs);
     updatePosition();
   }
 
